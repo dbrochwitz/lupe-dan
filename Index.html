@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>16:9 Bild-Editor mit interaktivem Overlay</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .upload-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        
+        .upload-section label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input[type="file"] {
+            margin-bottom: 10px;
+            padding: 8px;
+        }
+        
+        #canvasWrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px auto;
+            display: block;
+            text-align: center;
+        }
+        
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            max-width: 100%;
+            background: #fff;
+            cursor: default;
+        }
+        
+        canvas.dragging {
+            cursor: move;
+        }
+        
+        .info {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .info p {
+            margin: 5px 0;
+            color: #1976d2;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button.secondary {
+            background: #2196F3;
+        }
+        
+        button.secondary:hover {
+            background: #0b7dda;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>16:9 Bild-Editor mit interaktivem Overlay</h1>
+        
+        <div class="upload-section">
+            <label for="backgroundUpload">1. Hintergrundbild hochladen:</label>
+            <input type="file" id="backgroundUpload" accept="image/*">
+        </div>
+        
+        <div class="upload-section">
+            <label for="overlayUpload">2. Overlay-Bild hochladen (wird kreisrund ausgeschnitten):</label>
+            <input type="file" id="overlayUpload" accept="image/*">
+        </div>
+        
+        <div class="info">
+            <p><strong>Steuerung:</strong></p>
+            <p>🖱️ <strong>Verschieben:</strong> Klicken und ziehen im Kreis</p>
+            <p>🔍 <strong>Skalieren:</strong> Mausrad (oder Pinch auf Touch-Geräten)</p>
+            <p>🔄 <strong>Drehen:</strong> Shift + Mausrad</p>
+        </div>
+        
+        <div id="canvasWrapper">
+            <canvas id="canvas" width="1920" height="1080"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button onclick="resetCanvas()">Canvas zurücksetzen</button>
+            <button class="secondary" onclick="downloadImage()">Bild herunterladen</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let backgroundImg = null;
+        let overlayImg = null;
+        
+        // Overlay-Eigenschaften
+        let overlay = {
+            x: 960,
+            y: 540,
+            radius: 150,
+            rotation: 0,
+            isDragging: false
+        };
+        
+        let canvasOffset = canvas.getBoundingClientRect();
+        let startX, startY;
+        
+        // Canvas mit weißem Hintergrund initialisieren
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Aktualisiere Canvas-Offset bei Resize
+        window.addEventListener('resize', function() {
+            canvasOffset = canvas.getBoundingClientRect();
+        });
+        
+        // Hintergrundbild Upload
+        document.getElementById('backgroundUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        backgroundImg = img;
+                        redrawCanvas();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Overlay-Bild Upload
+        document.getElementById('overlayUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        overlayImg = img;
+                        redrawCanvas();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Hilfsfunktion: Prüfe ob Maus im Kreis ist
+        function isInsideCircle(mouseX, mouseY) {
+            const dx = mouseX - overlay.x;
+            const dy = mouseY - overlay.y;
+            return Math.sqrt(dx * dx + dy * dy) <= overlay.radius;
+        }
+        
+        // Maus-Events für Drag & Drop
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            
+            if (overlayImg && isInsideCircle(mouseX, mouseY)) {
+                overlay.isDragging = true;
+                startX = mouseX - overlay.x;
+                startY = mouseY - overlay.y;
+                canvas.classList.add('dragging');
+            }
+        });
+        
+        canvas.addEventListener('mousemove', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            
+            if (overlay.isDragging) {
+                overlay.x = mouseX - startX;
+                overlay.y = mouseY - startY;
+                
+                // Begrenze auf Canvas
+                overlay.x = Math.max(overlay.radius, Math.min(canvas.width - overlay.radius, overlay.x));
+                overlay.y = Math.max(overlay.radius, Math.min(canvas.height - overlay.radius, overlay.y));
+                
+                redrawCanvas();
+            } else if (overlayImg && isInsideCircle(mouseX, mouseY)) {
+                canvas.style.cursor = 'move';
+            } else {
+                canvas.style.cursor = 'default';
+            }
+        });
+        
+        canvas.addEventListener('mouseup', function(e) {
+            overlay.isDragging = false;
+            canvas.classList.remove('dragging');
+        });
+        
+        canvas.addEventListener('mouseleave', function(e) {
+            overlay.isDragging = false;
+            canvas.classList.remove('dragging');
+        });
+        
+        // Mausrad-Event für Skalierung und Rotation
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            
+            if (overlayImg && isInsideCircle(mouseX, mouseY)) {
+                if (e.shiftKey) {
+                    // Rotation mit Shift + Mausrad
+                    overlay.rotation += e.deltaY > 0 ? -5 : 5;
+                    overlay.rotation = overlay.rotation % 360;
+                } else {
+                    // Skalierung mit Mausrad
+                    const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
+                    overlay.radius = Math.max(30, Math.min(500, overlay.radius * scaleFactor));
+                }
+                redrawCanvas();
+            }
+        }, { passive: false });
+        
+        // Touch-Events für mobile Geräte
+        let initialDistance = 0;
+        
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const touchX = (e.touches[0].clientX - rect.left) * scaleX;
+                const touchY = (e.touches[0].clientY - rect.top) * scaleY;
+                
+                if (overlayImg && isInsideCircle(touchX, touchY)) {
+                    overlay.isDragging = true;
+                    startX = touchX - overlay.x;
+                    startY = touchY - overlay.y;
+                    e.preventDefault();
+                }
+            } else if (e.touches.length === 2) {
+                // Pinch für Skalierung
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                initialDistance = Math.sqrt(dx * dx + dy * dy);
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 1 && overlay.isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const touchX = (e.touches[0].clientX - rect.left) * scaleX;
+                const touchY = (e.touches[0].clientY - rect.top) * scaleY;
+                
+                overlay.x = touchX - startX;
+                overlay.y = touchY - startY;
+                
+                overlay.x = Math.max(overlay.radius, Math.min(canvas.width - overlay.radius, overlay.x));
+                overlay.y = Math.max(overlay.radius, Math.min(canvas.height - overlay.radius, overlay.y));
+                
+                redrawCanvas();
+                e.preventDefault();
+            } else if (e.touches.length === 2 && initialDistance > 0) {
+                // Pinch-Zoom
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const scaleFactor = distance / initialDistance;
+                
+                overlay.radius = Math.max(30, Math.min(500, overlay.radius * scaleFactor));
+                initialDistance = distance;
+                
+                redrawCanvas();
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', function(e) {
+            overlay.isDragging = false;
+            initialDistance = 0;
+        });
+        
+        // Canvas neu zeichnen
+        function redrawCanvas() {
+            // Canvas leeren
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Hintergrundbild zeichnen
+            if (backgroundImg) {
+                ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Overlay-Bild kreisrund mit Rotation zeichnen
+            if (overlayImg) {
+                ctx.save();
+                
+                // Zum Mittelpunkt des Overlays verschieben
+                ctx.translate(overlay.x, overlay.y);
+                
+                // Rotation anwenden
+                ctx.rotate(overlay.rotation * Math.PI / 180);
+                
+                // Kreis als Clipping-Pfad
+                ctx.beginPath();
+                ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+                
+                // Bild zeichnen
+                const imgSize = overlay.radius * 2;
+                ctx.drawImage(
+                    overlayImg,
+                    -overlay.radius,
+                    -overlay.radius,
+                    imgSize,
+                    imgSize
+                );
+                
+                ctx.restore();
+                
+                // Rand um den Kreis
+                ctx.save();
+                ctx.translate(overlay.x, overlay.y);
+                ctx.beginPath();
+                ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        
+        // Canvas zurücksetzen
+        function resetCanvas() {
+            backgroundImg = null;
+            overlayImg = null;
+            overlay = {
+                x: 960,
+                y: 540,
+                radius: 150,
+                rotation: 0,
+                isDragging: false
+            };
+            document.getElementById('backgroundUpload').value = '';
+            document.getElementById('overlayUpload').value = '';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Bild herunterladen
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.download = '16-9-komposition.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
