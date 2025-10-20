@@ -171,11 +171,11 @@
         </div>
         <div class="circle-group" id="upperCircleControls">
           <span>Overlay-Kreis Bild-Zoom:</span>
-          <input type="range" id="upperCircleZoom" min="100" max="450" value="100" step="1"/>
+          <input type="range" id="upperCircleZoom" min="100" max="450" value="150" step="1"/>
         </div>
         <div class="circle-group" id="upperCircleSizeControls">
           <span>Overlay-Kreis Größe:</span>
-          <input type="range" id="upperCircleRadius" min="30" max="500" value="170"/>
+          <input type="range" id="upperCircleRadius" min="30" max="500" value="400"/>
         </div>
       </div>
       <div class="main-actions">
@@ -202,17 +202,17 @@ function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val)); 
 }
 
-/* State */
+/* State - Startwerte aus Slidern */
 let state = {
   bgImg: null,
   overlayImg: null,
   upper: {
     x: 540, 
     y: 700, 
-    radius: 170,  // Startwert entspricht Slider-Position 170
+    radius: 400,  // Startwert entspricht Slider-Position 400
     imgOffsetX: 0, 
     imgOffsetY: 0, 
-    zoom: 1.0,
+    zoom: 1.5,    // Startwert entspricht Slider-Position 150 (150/100 = 1.5)
     minZoom: 1.0, 
     maxZoom: 4.5
   },
@@ -309,13 +309,13 @@ document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
 /* Reset */
 document.getElementById('resetBtn').addEventListener('click',()=>{
   state.upper = { 
-    x:540, y:700, radius:170,
-    imgOffsetX:0, imgOffsetY:0, zoom:1.0, 
+    x:540, y:700, radius:400,
+    imgOffsetX:0, imgOffsetY:0, zoom:1.5, 
     minZoom:1.0, maxZoom:4.5 
   };
   state.lower = { x:540, y:1400, radius:120 };
-  document.getElementById('upperCircleZoom').value = 100;
-  document.getElementById('upperCircleRadius').value = 170;
+  document.getElementById('upperCircleZoom').value = 150;
+  document.getElementById('upperCircleRadius').value = 400;
   document.getElementById('lowerCircleRadius').value = 120;
   draw();
 });
@@ -633,4 +633,3 @@ draw();
   </script>
 </body>
 </html>
- 
