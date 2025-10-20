@@ -539,7 +539,7 @@ function draw() {
     const endY = state.lower.y - Math.sin(angle) * state.lower.radius;
     
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 5;
     ctx.shadowOffsetY = 5;
@@ -624,7 +624,7 @@ function drawCircleFilled(x, y, radius, fillColor) {
 
 function drawCircleOutline(x, y, radius) {
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowColor = "rgba(0,0,0,0.8)";
   ctx.shadowBlur = 10;
   ctx.shadowOffsetX = 5;
   ctx.shadowOffsetY = 5;
