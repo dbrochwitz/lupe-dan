@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>9:16 Bild-Editor mit zwei Kreisen und Modus-Umschaltung</title>
+<title>9:16 Bild-Editor mit Upload und Modus-Umschaltung</title>
 <style>
+  /* Styles unverändert wie zuvor */
   body {
     font-family: Arial, sans-serif;
     background: #f5f5f5;
@@ -43,11 +44,29 @@
   .buttons {
     text-align: center;
   }
+  .upload-section {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  input[type=file] {
+    margin-top: 10px;
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>Bild-Editor: Modus 1 = Kreis bewegen/skalieren, Modus 2 = Bild bewegen/zoomen</h1>
+  
+  <div class="upload-section">
+    <label for="backgroundUpload">Hintergrundbild hochladen:</label><br/>
+    <input type="file" id="backgroundUpload" accept="image/*">
+  </div>
+  
+  <div class="upload-section">
+    <label for="overlayUpload">Bild für den ersten Kreis hochladen:</label><br/>
+    <input type="file" id="overlayUpload" accept="image/*">
+  </div>
+
   <canvas id="canvas" width="1080" height="1920"></canvas>
   <div class="buttons">
     <button id="mode1" class="active">Modus 1: Kreis bewegen/skalieren</button>
@@ -63,8 +82,8 @@ let mode = 1;
 
 const backgroundImg = new Image();
 const overlayImg = new Image();
-backgroundImg.src = 'default.jpg';
-overlayImg.src = 'default.jpg';
+backgroundImg.src = '';
+overlayImg.src = 'https://planthawaii.com/wp-content/uploads/2023/02/Blog-3.1.jpg';
 
 let overlay1 = {
   x: 540, y: 700,
@@ -95,6 +114,32 @@ function switchMode(m){
   document.getElementById('mode1').classList.toggle('active', m===1);
   document.getElementById('mode2').classList.toggle('active', m===2);
 }
+
+// Upload-Handler Hintergrundbild
+document.getElementById('backgroundUpload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    backgroundImg.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// Upload-Handler Overlay-Bild
+document.getElementById('overlayUpload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    overlayImg.src = evt.target.result;
+    // Reset Bildposition & Zoom beim neuen Bild
+    imageTransform = { x: 0, y: 0, scale: 1 };
+  };
+  reader.readAsDataURL(file);
+});
+
+// Restliche Funktionen bleiben so wie vorher
 
 function getPointerPos(e){
   const rect = canvas.getBoundingClientRect();
@@ -128,7 +173,6 @@ function startDrag(e){
   e.preventDefault();
   let pos = getPointerPos(e);
   if(mode === 1){
-    // Prüfe ob an Rand (Skalieren) oder im Kreis (Verschieben)
     if(isOnCircleEdge(pos.x,pos.y,overlay2)){
       activeOverlay = overlay2;
       dragMode = "scale";
@@ -147,7 +191,6 @@ function startDrag(e){
       return;
     }
   } else if(mode === 2){
-    // Modus 2 Bildbewegen nur, wenn im ersten Kreis
     if(isInsideCircle(pos.x, pos.y, overlay1)){
       activeOverlay = overlay1;
       dragMode = "moveImage";
@@ -226,7 +269,6 @@ function stopDrag(e){
 canvas.addEventListener('wheel', e=>{
   e.preventDefault();
   if(mode === 1){
-    // Mausrad verarbeitet jetzt auch Skalierung der Kreise
     if(activeOverlay){
       const delta = e.deltaY > 0 ? 0.95 : 1.05;
       activeOverlay.radius = Math.max(30, activeOverlay.radius * delta);
@@ -347,7 +389,6 @@ function draw(){
   drawOverlay1();
   drawOverlay2();
 }
-
 </script>
 </body>
 </html>
