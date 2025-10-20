@@ -194,46 +194,7 @@
 /* Canvas Setup */
 const canvas = document.getElementById('compositionCanvas');
 const ctx = canvas.getContext('2d');
-//---------
-// Canvas-Elemente abrufen
-const context = canvas.getContext('2d');
 
-// Wasserzeichen-Bild vorladen
-const watermarkImage = new Image();
-watermarkImage.crossOrigin = 'anonymous';
-watermarkImage.src = 'https://www.pflanzenundco.de/cdn/shop/files/Pflanzen-und-Co-DM-logo-B_8ba02128-0a6a-4e53-8e3b-71abbca2a683.png';
-
-// Funktion zum Zeichnen des Wasserzeichens
-function drawWatermark() {
-    // Wasserzeichen oben links mit 10px Abstand
-    context.drawImage(watermarkImage, 10, 10);
-}
-
-// In deine bestehende Zeichenfunktion integrieren
-function drawMagGlass() {
-    // Dein bestehender Lupen-Code hier...
-    
-    // Canvas leeren
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Originalbild zeichnen
-    context.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
-    
-    // Lupen-Effekt zeichnen (dein bestehender Code)
-    // ... dein Lupen-Code ...
-    
-    // Wasserzeichen NACH allen anderen Elementen zeichnen
-    if (watermarkImage.complete) {
-        drawWatermark();
-    }
-}
-
-// Wasserzeichen laden und dann erste Zeichnung auslösen
-watermarkImage.onload = function() {
-    drawMagGlass();
-};
-
-//---------
 // Canvas auf feste Größe setzen
 canvas.width = 1080;
 canvas.height = 1920;
