@@ -99,6 +99,8 @@
       display: flex;
       justify-content: center;
       gap: 10px;
+      width: 100%;
+      max-width: 400px;
     }
     .main-actions button {
       min-width: 100px;
@@ -177,14 +179,15 @@
           <input type="range" id="upperCircleRadius" min="30" max="500" value="400"/>
         </div>
       </div>
-      <div class="main-actions">
-        <button id="resetBtn" class="secondary">Zurücksetzen</button>
-        <button id="downloadBtn" class="primary">Download PNG</button>
-      </div>
     </div>
     
     <div id="canvasContainer">
       <canvas id="compositionCanvas"></canvas>
+    </div>
+
+    <div class="main-actions">
+      <button id="resetBtn" class="secondary">Zurücksetzen</button>
+      <button id="downloadBtn" class="primary">Download PNG</button>
     </div>
   </div>
   <script>
