@@ -209,10 +209,11 @@ let state = {
   upper: {
     x: 540, 
     y: 700, 
-    radius: 400,  // Startwert entspricht Slider-Position 400
+    radius: 400,
     imgOffsetX: 0, 
     imgOffsetY: 0, 
-    zoom: 1.5,    // Startwert entspricht Slider-Position 150 (150/100 = 1.5)
+    zoom: 1.5,
+    rotation: 0,  // NEU: Rotation in Grad
     minZoom: 1.0, 
     maxZoom: 4.5
   },
@@ -223,8 +224,17 @@ let state = {
   }
 };
 
-/* Interaktionsmodus - wird dynamisch erkannt */
-let interactionMode = 'move'; // 'move', 'pan', oder 'zoom'
+/* Interaktionsvariablen */
+let activeCircle = null;
+let interactionMode = 'none';
+let dragStart = null;
+let panStart = null;
+let lastTouches = [];
+let initialPinchDistance = 0;
+let initialPinchAngle = 0;
+let initialZoom = 1;
+let initialRotation = 0;
+let initialImgOffset = {x: 0, y: 0};
 
 /* Default-Bilder laden beim Start */
 function loadDefaultImages() {
@@ -288,19 +298,16 @@ document.getElementById('overlayUpload').addEventListener('change', e => {
 });
 
 /* UI-Controls */
-// Schieberegler für oberen Kreis Bild-Zoom (100-450%)
 document.getElementById('upperCircleZoom').addEventListener('input',e=>{
   state.upper.zoom = Number(e.target.value) / 100;
   draw();
 });
 
-// Schieberegler für oberen Kreis Größe
 document.getElementById('upperCircleRadius').addEventListener('input',e=>{
   state.upper.radius = Number(e.target.value);
   draw();
 });
 
-// Schieberegler für unteren Kreis Größe
 document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
   state.lower.radius = Number(e.target.value);
   draw();
@@ -310,7 +317,7 @@ document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
 document.getElementById('resetBtn').addEventListener('click',()=>{
   state.upper = { 
     x:540, y:700, radius:400,
-    imgOffsetX:0, imgOffsetY:0, zoom:1.5, 
+    imgOffsetX:0, imgOffsetY:0, zoom:1.5, rotation:0,
     minZoom:1.0, maxZoom:4.5 
   };
   state.lower = { x:540, y:1400, radius:120 };
@@ -331,15 +338,7 @@ document.getElementById('downloadBtn').addEventListener('click',()=>{
   setTimeout(()=>document.body.removeChild(a),200);
 });
 
-/* Drag & Interaction */
-let activeCircle = null;
-let dragStart = null;
-let panStart = null;
-let zoomDistStart = 0;
-let zoomValStart = 1;
-let radiusStart = 0;
-let lastTouches = [];
-
+/* Hilfsfunktionen für Touch/Mouse */
 function getCanvasCoords(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
@@ -367,7 +366,11 @@ function getTouchCenter(t1, t2) {
   };
 }
 
-/* Mouse & Touch Events */
+function getTouchAngle(t1, t2) {
+  return Math.atan2(t2.y - t1.y, t2.x - t1.x) * 180 / Math.PI;
+}
+
+/* Event Handlers */
 canvas.addEventListener('mousedown', handleStart);
 canvas.addEventListener('mousemove', handleMove);
 canvas.addEventListener('mouseup', handleEnd);
@@ -381,54 +384,54 @@ function handleStart(e) {
   e.preventDefault();
   
   let pos;
-  if (e.touches && e.touches.length === 1) {
-    pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
-    // Ein-Finger-Touch: Kreis verschieben (nicht Bild!)
+  
+  // EIN-FINGER Touch oder Maus
+  if ((e.touches && e.touches.length === 1) || e.clientX !== undefined) {
+    if (e.touches) {
+      pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+    } else {
+      pos = getCanvasCoords(e.clientX, e.clientY);
+    }
+    
+    // Oberer Kreis: Kreis verschieben (nicht Bildinhalt)
     if (insideCircle(pos, state.upper)) {
       activeCircle = 'upper';
+      interactionMode = 'moveCircle';
       dragStart = pos;
-      panStart = { ...state.upper };
-      interactionMode = 'move'; // Kreis verschieben
-    } else if (insideCircle(pos, state.lower)) {
+      panStart = { x: state.upper.x, y: state.upper.y };
+    } 
+    // Unterer Kreis: Kreis verschieben
+    else if (insideCircle(pos, state.lower)) {
       activeCircle = 'lower';
+      interactionMode = 'moveCircle';
       dragStart = pos;
-      panStart = { ...state.lower };
-      interactionMode = 'move';
+      panStart = { x: state.lower.x, y: state.lower.y };
     }
-  } else if (e.touches && e.touches.length === 2) {
-    // Zwei-Finger-Geste
+  } 
+  // ZWEI-FINGER Touch
+  else if (e.touches && e.touches.length === 2) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     const center = getTouchCenter(t1, t2);
     
-    // Prüfe, welcher Kreis betroffen ist
+    // Oberer Kreis: Bild manipulieren (Zoom, Rotation, Panning)
     if (insideCircle(center, state.upper)) {
       activeCircle = 'upper';
+      interactionMode = 'manipulateImage';
       lastTouches = [t1, t2];
-      zoomDistStart = distance(t1, t2);
-      zoomValStart = state.upper.zoom;
-      interactionMode = 'zoom'; // Bild zoomen
-    } else if (insideCircle(center, state.lower)) {
+      initialPinchDistance = distance(t1, t2);
+      initialPinchAngle = getTouchAngle(t1, t2);
+      initialZoom = state.upper.zoom;
+      initialRotation = state.upper.rotation;
+      initialImgOffset = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
+    } 
+    // Unterer Kreis: Kreisgröße ändern (wie vorher)
+    else if (insideCircle(center, state.lower)) {
       activeCircle = 'lower';
+      interactionMode = 'resizeCircle';
       lastTouches = [t1, t2];
-      zoomDistStart = distance(t1, t2);
-      radiusStart = state.lower.radius;
-      interactionMode = 'resize';
-    }
-    return;
-  } else if (e.clientX !== undefined) {
-    // Maus: Kreis verschieben
-    pos = getCanvasCoords(e.clientX, e.clientY);
-    if (insideCircle(pos, state.upper)) {
-      activeCircle = 'upper';
-      dragStart = pos;
-      panStart = { ...state.upper };
-      interactionMode = 'move';
-    } else if (insideCircle(pos, state.lower)) {
-      activeCircle = 'lower';
-      dragStart = pos;
-      panStart = { ...state.lower };
-      interactionMode = 'move';
+      initialPinchDistance = distance(t1, t2);
+      panStart = { radius: state.lower.radius };
     }
   }
 }
@@ -438,30 +441,48 @@ function handleMove(e) {
   
   if (!activeCircle) return;
   
-  // Handle zwei-Finger Pinch
+  // ZWEI-FINGER Manipulation
   if (e.touches && e.touches.length === 2 && lastTouches.length === 2) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     
-    const lastDist = distance(lastTouches[0], lastTouches[1]);
-    const nowDist = distance(t1, t2);
-    const scale = nowDist / lastDist;
-    
-    if (activeCircle === 'upper' && interactionMode === 'zoom') {
-      // Zoom für Bildinhalt
-      state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
+    if (activeCircle === 'upper' && interactionMode === 'manipulateImage') {
+      // Berechne Änderungen
+      const currentDistance = distance(t1, t2);
+      const currentAngle = getTouchAngle(t1, t2);
+      const currentCenter = getTouchCenter(t1, t2);
+      const lastCenter = getTouchCenter(lastTouches[0], lastTouches[1]);
+      
+      // ZOOM (Pinch)
+      const zoomScale = currentDistance / initialPinchDistance;
+      state.upper.zoom = clamp(initialZoom * zoomScale, state.upper.minZoom, state.upper.maxZoom);
       document.getElementById('upperCircleZoom').value = state.upper.zoom * 100;
-    } else if (activeCircle === 'lower' && interactionMode === 'resize') {
-      // Kreisgröße für unteren Kreis
-      state.lower.radius = clamp(state.lower.radius * scale, 30, 500);
+      
+      // ROTATION
+      const angleDelta = currentAngle - initialPinchAngle;
+      state.upper.rotation = initialRotation + angleDelta;
+      
+      // PANNING (Bildverschiebung)
+      const panDeltaX = currentCenter.x - lastCenter.x;
+      const panDeltaY = currentCenter.y - lastCenter.y;
+      state.upper.imgOffsetX = initialImgOffset.x + (currentCenter.x - getTouchCenter(lastTouches[0], lastTouches[1]).x);
+      state.upper.imgOffsetY = initialImgOffset.y + (currentCenter.y - getTouchCenter(lastTouches[0], lastTouches[1]).y);
+      
+      draw();
+      return;
+    } 
+    else if (activeCircle === 'lower' && interactionMode === 'resizeCircle') {
+      // Unterer Kreis: Größe ändern (wie vorher)
+      const currentDistance = distance(t1, t2);
+      const scale = currentDistance / initialPinchDistance;
+      state.lower.radius = clamp(panStart.radius * scale, 30, 500);
       document.getElementById('lowerCircleRadius').value = state.lower.radius;
+      draw();
+      return;
     }
-    
-    lastTouches = [t1, t2];
-    draw();
-    return;
   }
   
+  // EIN-FINGER Bewegung (Kreis verschieben)
   if (!dragStart) return;
   
   let pos;
@@ -473,39 +494,34 @@ function handleMove(e) {
   
   if (!pos) return;
   
-  if (activeCircle === 'upper') {
-    if (interactionMode === 'move') {
-      // Kreis verschieben
+  if (interactionMode === 'moveCircle') {
+    if (activeCircle === 'upper') {
+      // Oberen Kreis verschieben
       state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
       state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
-    } else if (interactionMode === 'pan') {
-      // Bildausschnitt verschieben (wird jetzt nicht mehr über Touch aktiviert)
-      state.upper.imgOffsetX = panStart.imgOffsetX + (pos.x - dragStart.x);
-      state.upper.imgOffsetY = panStart.imgOffsetY + (pos.y - dragStart.y);
+    } else if (activeCircle === 'lower') {
+      // Unteren Kreis verschieben
+      state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
+      state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
     }
-  } else if (activeCircle === 'lower') {
-    // Kreis verschieben
-    state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
-    state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
+    draw();
   }
-  
-  draw();
 }
 
 function handleEnd(e) {
   e.preventDefault();
   activeCircle = null;
+  interactionMode = 'none';
   dragStart = null;
   panStart = null;
   lastTouches = [];
-  interactionMode = 'move';
 }
 
 /* Drawing */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Hintergrund - ohne Abrundung
+  // Hintergrund
   if (state.bgImg) {
     ctx.drawImage(state.bgImg, 0, 0, canvas.width, canvas.height);
   } else {
@@ -516,12 +532,9 @@ function draw() {
   // Verbindungslinie (nur außerhalb der Kreise)
   const dist = distance(state.upper, state.lower);
   if (dist > state.upper.radius + state.lower.radius) {
-    // Berechne Startpunkt (am Rand des oberen Kreises)
     const angle = Math.atan2(state.lower.y - state.upper.y, state.lower.x - state.upper.x);
     const startX = state.upper.x + Math.cos(angle) * state.upper.radius;
     const startY = state.upper.y + Math.sin(angle) * state.upper.radius;
-    
-    // Berechne Endpunkt (am Rand des unteren Kreises)
     const endX = state.lower.x - Math.cos(angle) * state.lower.radius;
     const endY = state.lower.y - Math.sin(angle) * state.lower.radius;
     
@@ -539,39 +552,41 @@ function draw() {
     ctx.restore();
   }
   
-  // Unterer Kreis - nur Outline (durchsichtig)
+  // Unterer Kreis - nur Outline
   drawCircleOutline(state.lower.x, state.lower.y, state.lower.radius);
   
-  // Oberer Kreis - zuerst weiße Füllung, dann Bild mit Clip, dann Outline
+  // Oberer Kreis - weiße Füllung
   drawCircleFilled(state.upper.x, state.upper.y, state.upper.radius, "#ffffff");
   
+  // Overlay-Bild mit Rotation
   if (state.overlayImg) {
     ctx.save();
     
-    // Clip für Kreis (etwas kleiner als Radius für Outline-Platz)
+    // Clip für Kreis
     ctx.beginPath();
     ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     
-    // Cover-Modus: Bild füllt den Kreis IMMER vollständig ohne Verzerrung
+    // Transformationen: erst zum Kreismittelpunkt, dann rotieren
+    ctx.translate(state.upper.x, state.upper.y);
+    ctx.rotate(state.upper.rotation * Math.PI / 180);
+    ctx.translate(-state.upper.x, -state.upper.y);
+    
+    // Cover-Modus berechnen
     const imgAspect = state.overlayImg.width / state.overlayImg.height;
     const circleSize = (state.upper.radius - 4) * 2;
     
     let drawWidth, drawHeight;
     
-    // Berechne Dimensionen so, dass der Kreis IMMER gefüllt ist
     if (imgAspect > 1) {
-      // Querformat: Höhe muss mindestens Kreisdurchmesser sein
       drawHeight = circleSize * state.upper.zoom;
       drawWidth = drawHeight * imgAspect;
     } else {
-      // Hochformat: Breite muss mindestens Kreisdurchmesser sein
       drawWidth = circleSize * state.upper.zoom;
       drawHeight = drawWidth / imgAspect;
     }
     
-    // Sicherstellen, dass keine Dimension kleiner als Kreisdurchmesser ist
     const minSize = circleSize * state.upper.zoom;
     if (drawWidth < minSize) {
       drawWidth = minSize;
@@ -582,6 +597,7 @@ function draw() {
       drawWidth = drawHeight * imgAspect;
     }
     
+    // Bild zeichnen mit Offset
     ctx.drawImage(
       state.overlayImg,
       state.upper.x - drawWidth/2 + state.upper.imgOffsetX,
@@ -593,11 +609,10 @@ function draw() {
     ctx.restore();
   }
   
-  // Outline für oberen Kreis (über das Bild)
+  // Outline für oberen Kreis
   drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
 }
 
-// Gefüllten Kreis zeichnen (ohne Schatten)
 function drawCircleFilled(x, y, radius, fillColor) {
   ctx.save();
   ctx.fillStyle = fillColor;
@@ -607,23 +622,17 @@ function drawCircleFilled(x, y, radius, fillColor) {
   ctx.restore();
 }
 
-// Nur Outline mit Schatten zeichnen
 function drawCircleOutline(x, y, radius) {
   ctx.save();
-  
-  // Schatten nur für die Outline
   ctx.shadowColor = "rgba(0,0,0,0.4)";
   ctx.shadowBlur = 10;
   ctx.shadowOffsetX = 5;
   ctx.shadowOffsetY = 5;
-  
-  // Weißer Rand
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 8;
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.stroke();
-  
   ctx.restore();
 }
 
