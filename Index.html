@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>16:9 Bild-Editor mit interaktivem Overlay</title>
+    <title>9:16 Bild-Editor mit interaktivem Overlay</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
+            max-width: 800px;
             margin: 20px auto;
             padding: 20px;
             background: #f5f5f5;
@@ -109,7 +109,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>16:9 Bild-Editor mit interaktivem Overlay</h1>
+        <h1>9:16 Bild-Editor mit interaktivem Overlay</h1>
         
         <div class="upload-section">
             <label for="backgroundUpload">1. Hintergrundbild hochladen:</label>
@@ -129,7 +129,7 @@
         </div>
         
         <div id="canvasWrapper">
-            <canvas id="canvas" width="1920" height="1080"></canvas>
+            <canvas id="canvas" width="1080" height="1920"></canvas>
         </div>
         
         <div class="controls">
@@ -147,8 +147,8 @@
         
         // Overlay-Eigenschaften
         let overlay = {
-            x: 960,
-            y: 540,
+            x: 540,
+            y: 960,
             radius: 150,
             rotation: 0,
             isDragging: false
@@ -381,13 +381,13 @@
                 
                 ctx.restore();
                 
-                // Rand um den Kreis
+                // Doppelt so dicker Rand um den Kreis (8px statt 4px)
                 ctx.save();
                 ctx.translate(overlay.x, overlay.y);
                 ctx.beginPath();
                 ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
                 ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 8;
                 ctx.stroke();
                 ctx.restore();
             }
@@ -398,8 +398,8 @@
             backgroundImg = null;
             overlayImg = null;
             overlay = {
-                x: 960,
-                y: 540,
+                x: 540,
+                y: 960,
                 radius: 150,
                 rotation: 0,
                 isDragging: false
@@ -413,7 +413,7 @@
         // Bild herunterladen
         function downloadImage() {
             const link = document.createElement('a');
-            link.download = '16-9-komposition.png';
+            link.download = '9-16-komposition.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
         }
