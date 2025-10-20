@@ -165,13 +165,17 @@
         </label>
       </div>
       <div class="circle-controls">
-        <div class="circle-group" id="upperCircleControls">
-          <span>Overlay-Kreis Zoom:</span>
-          <input type="range" id="upperCircleRadius" min="100" max="300" value="100" step="1"/>
-        </div>
         <div class="circle-group" id="lowerCircleControls">
           <span>Unterer Kreis Größe:</span>
           <input type="range" id="lowerCircleRadius" min="30" max="500" value="120"/>
+        </div>
+        <div class="circle-group" id="upperCircleControls">
+          <span>Overlay-Kreis Bild-Zoom:</span>
+          <input type="range" id="upperCircleZoom" min="100" max="300" value="100" step="1"/>
+        </div>
+        <div class="circle-group" id="upperCircleSizeControls">
+          <span>Overlay-Kreis Größe:</span>
+          <input type="range" id="upperCircleRadius" min="30" max="500" value="170"/>
         </div>
       </div>
       <div class="main-actions">
@@ -284,12 +288,19 @@ document.getElementById('overlayUpload').addEventListener('change', e => {
 });
 
 /* UI-Controls */
-// Schieberegler für oberen Kreis steuert den Bild-Zoom (100-300%)
-document.getElementById('upperCircleRadius').addEventListener('input',e=>{
+// Schieberegler für oberen Kreis Bild-Zoom (100-300%)
+document.getElementById('upperCircleZoom').addEventListener('input',e=>{
   state.upper.zoom = Number(e.target.value) / 100;
   draw();
 });
 
+// Schieberegler für oberen Kreis Größe
+document.getElementById('upperCircleRadius').addEventListener('input',e=>{
+  state.upper.radius = Number(e.target.value);
+  draw();
+});
+
+// Schieberegler für unteren Kreis Größe
 document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
   state.lower.radius = Number(e.target.value);
   draw();
@@ -303,7 +314,8 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
     minZoom:1.0, maxZoom:3.0 
   };
   state.lower = { x:540, y:1400, radius:120 };
-  document.getElementById('upperCircleRadius').value = 100;
+  document.getElementById('upperCircleZoom').value = 100;
+  document.getElementById('upperCircleRadius').value = 170;
   document.getElementById('lowerCircleRadius').value = 120;
   draw();
 });
@@ -439,7 +451,7 @@ function handleMove(e) {
     if (activeCircle === 'upper' && interactionMode === 'zoom') {
       // Zoom für Bildinhalt
       state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
-      document.getElementById('upperCircleRadius').value = state.upper.zoom * 100;
+      document.getElementById('upperCircleZoom').value = state.upper.zoom * 100;
     } else if (activeCircle === 'lower' && interactionMode === 'resize') {
       // Kreisgröße für unteren Kreis
       state.lower.radius = clamp(state.lower.radius * scale, 30, 500);
@@ -543,30 +555,31 @@ function draw() {
     ctx.closePath();
     ctx.clip();
     
-    // Cover-Modus: Bild füllt den Kreis vollständig ohne Verzerrung
+    // Cover-Modus: Bild füllt den Kreis IMMER vollständig ohne Verzerrung
     const imgAspect = state.overlayImg.width / state.overlayImg.height;
     const circleSize = (state.upper.radius - 4) * 2;
     
     let drawWidth, drawHeight;
     
-    // Berechne Dimensionen im Cover-Modus
+    // Berechne Dimensionen so, dass der Kreis IMMER gefüllt ist
     if (imgAspect > 1) {
-      // Querformat
+      // Querformat: Höhe muss mindestens Kreisdurchmesser sein
       drawHeight = circleSize * state.upper.zoom;
       drawWidth = drawHeight * imgAspect;
     } else {
-      // Hochformat oder quadratisch
+      // Hochformat: Breite muss mindestens Kreisdurchmesser sein
       drawWidth = circleSize * state.upper.zoom;
       drawHeight = drawWidth / imgAspect;
     }
     
-    // Stelle sicher, dass das Bild den Kreis vollständig ausfüllt
-    if (drawWidth < circleSize) {
-      drawWidth = circleSize * state.upper.zoom;
+    // Sicherstellen, dass keine Dimension kleiner als Kreisdurchmesser ist
+    const minSize = circleSize * state.upper.zoom;
+    if (drawWidth < minSize) {
+      drawWidth = minSize;
       drawHeight = drawWidth / imgAspect;
     }
-    if (drawHeight < circleSize) {
-      drawHeight = circleSize * state.upper.zoom;
+    if (drawHeight < minSize) {
+      drawHeight = minSize;
       drawWidth = drawHeight * imgAspect;
     }
     
