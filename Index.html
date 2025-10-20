@@ -383,13 +383,12 @@ function handleStart(e) {
   let pos;
   if (e.touches && e.touches.length === 1) {
     pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
-    // Ein-Finger-Touch: Kreis verschieben oder Bildausschnitt verschieben
+    // Ein-Finger-Touch: Kreis verschieben (nicht Bild!)
     if (insideCircle(pos, state.upper)) {
       activeCircle = 'upper';
       dragStart = pos;
       panStart = { ...state.upper };
-      // Standard: Bild-Ausschnitt verschieben (pan)
-      interactionMode = 'pan';
+      interactionMode = 'move'; // Kreis verschieben
     } else if (insideCircle(pos, state.lower)) {
       activeCircle = 'lower';
       dragStart = pos;
@@ -408,7 +407,7 @@ function handleStart(e) {
       lastTouches = [t1, t2];
       zoomDistStart = distance(t1, t2);
       zoomValStart = state.upper.zoom;
-      interactionMode = 'zoom';
+      interactionMode = 'zoom'; // Bild zoomen
     } else if (insideCircle(center, state.lower)) {
       activeCircle = 'lower';
       lastTouches = [t1, t2];
@@ -480,7 +479,7 @@ function handleMove(e) {
       state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
       state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
     } else if (interactionMode === 'pan') {
-      // Bildausschnitt verschieben
+      // Bildausschnitt verschieben (wird jetzt nicht mehr über Touch aktiviert)
       state.upper.imgOffsetX = panStart.imgOffsetX + (pos.x - dragStart.x);
       state.upper.imgOffsetY = panStart.imgOffsetY + (pos.y - dragStart.y);
     }
