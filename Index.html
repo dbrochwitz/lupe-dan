@@ -3,40 +3,47 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>9:16 Bild-Editor mit Upload und Modus-Umschaltung</title>
+<title>Responsiver 9:16 Bild-Editor mit Touch</title>
 <style>
-  /* Styles unverändert wie zuvor */
   body {
     font-family: Arial, sans-serif;
     background: #f5f5f5;
-    max-width: 800px;
-    margin: 0 auto;
+    margin: 0;
     padding: 20px;
+    display: flex;
+    justify-content: center;
   }
   .container {
     background: white;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    max-width: 1080px;
+    width: 100vw;
+    box-sizing: border-box;
   }
   h1 {
     text-align: center;
+    margin-top: 0;
   }
   canvas {
     display: block;
     margin: 20px auto;
     border: 2px solid #ddd;
     border-radius: 5px;
-    background: #fff;
+    width: 100%;
+    height: auto; /* Höhe wird per JS gesetzt */
+    touch-action: none; /* verhindert Scroll bei Touch-Gesten */
   }
   button {
     padding: 10px 20px;
-    margin: 10px;
+    margin: 10px 5px;
     border:none;
     border-radius: 5px;
     background: #2196F3;
     color: white;
     cursor: pointer;
+    min-width: 140px;
   }
   button.active {
     background: #4CAF50;
@@ -55,19 +62,20 @@
 </head>
 <body>
 <div class="container">
-  <h1>Bild-Editor: Modus 1 = Kreis bewegen/skalieren, Modus 2 = Bild bewegen/zoomen</h1>
-  
+  <h1>Responsiver Bild-Editor: Modus Umschalter</h1>
+
   <div class="upload-section">
     <label for="backgroundUpload">Hintergrundbild hochladen:</label><br/>
-    <input type="file" id="backgroundUpload" accept="image/*">
+    <input type="file" id="backgroundUpload" accept="image/*" />
   </div>
-  
+
   <div class="upload-section">
     <label for="overlayUpload">Bild für den ersten Kreis hochladen:</label><br/>
-    <input type="file" id="overlayUpload" accept="image/*">
+    <input type="file" id="overlayUpload" accept="image/*" />
   </div>
 
   <canvas id="canvas" width="1080" height="1920"></canvas>
+  
   <div class="buttons">
     <button id="mode1" class="active">Modus 1: Kreis bewegen/skalieren</button>
     <button id="mode2">Modus 2: Bild bewegen/zoomen</button>
@@ -79,6 +87,20 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 let mode = 1;
+const maxWidth = 1080;
+const aspectRatio = 9/16;
+
+function resizeCanvas() {
+  const containerWidth = Math.min(window.innerWidth - 40, maxWidth);
+  canvas.style.width = containerWidth + 'px';
+  canvas.style.height = (containerWidth / aspectRatio) + 'px';
+  // Hohe Auflösung im Hintergrund beibehalten für schärfe
+  canvas.width = maxWidth;
+  canvas.height = maxWidth / aspectRatio;
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 const backgroundImg = new Image();
 const overlayImg = new Image();
@@ -86,13 +108,13 @@ backgroundImg.src = 'default.jpg';
 overlayImg.src = 'default.jpg';
 
 let overlay1 = {
-  x: 540, y: 700,
+  x: canvas.width/2, y: canvas.height*0.365,
   radius: 250,
   rotation: 0
 };
 
 let overlay2 = {
-  x: 540, y: 1300,
+  x: canvas.width/2, y: canvas.height*0.678,
   radius: 250,
   rotation: 0
 };
@@ -101,45 +123,26 @@ let imageTransform = { x: 0, y: 0, scale: 1 };
 
 let dragging = false;
 let dragStart = {x:0, y:0};
-let dragMode = null; // "move" or "scale"
-let activeOverlay = null; 
+let dragMode = null;
+let activeOverlay = null;
+let dragStartImage = null;
 
-overlayImg.onload = backgroundImg.onload = draw;
+overlayImg.onload = backgroundImg.onload = () => {
+  overlay1.x = canvas.width/2;
+  overlay1.y = canvas.height*0.365;
+  overlay2.x = canvas.width/2;
+  overlay2.y = canvas.height*0.678;
+  draw();
+};
 
 document.getElementById('mode1').onclick = () => switchMode(1);
 document.getElementById('mode2').onclick = () => switchMode(2);
 
 function switchMode(m){
   mode = m;
-  document.getElementById('mode1').classList.toggle('active', m===1);
-  document.getElementById('mode2').classList.toggle('active', m===2);
+  document.getElementById('mode1').classList.toggle('active', mode===1);
+  document.getElementById('mode2').classList.toggle('active', mode===2);
 }
-
-// Upload-Handler Hintergrundbild
-document.getElementById('backgroundUpload').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt){
-    backgroundImg.src = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-});
-
-// Upload-Handler Overlay-Bild
-document.getElementById('overlayUpload').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt){
-    overlayImg.src = evt.target.result;
-    // Reset Bildposition & Zoom beim neuen Bild
-    imageTransform = { x: 0, y: 0, scale: 1 };
-  };
-  reader.readAsDataURL(file);
-});
-
-// Restliche Funktionen bleiben so wie vorher
 
 function getPointerPos(e){
   const rect = canvas.getBoundingClientRect();
@@ -194,6 +197,7 @@ function startDrag(e){
     if(isInsideCircle(pos.x, pos.y, overlay1)){
       activeOverlay = overlay1;
       dragMode = "moveImage";
+      dragStartImage = {...imageTransform};
     } else {
       activeOverlay = null;
       dragMode = null;
@@ -202,9 +206,6 @@ function startDrag(e){
   }
   dragging = true;
   dragStart = pos;
-  if(dragMode === "moveImage"){
-    dragStartImage = {...imageTransform};
-  }
 }
 
 canvas.addEventListener('mousedown', startDrag);
@@ -227,11 +228,12 @@ canvas.addEventListener('mousemove', e=>{
       activeOverlay.radius = Math.max(30, distCenter);
     }
   } else if(mode === 2 && dragMode === "moveImage"){
-    imageTransform.x += dx;
-    imageTransform.y += dy;
+    imageTransform.x = dragStartImage.x + dx;
+    imageTransform.y = dragStartImage.y + dy;
   }
   draw();
 });
+
 canvas.addEventListener('touchmove', e=>{
   if(!dragging || !activeOverlay) return;
   e.preventDefault();
@@ -249,11 +251,11 @@ canvas.addEventListener('touchmove', e=>{
       activeOverlay.radius = Math.max(30, distCenter);
     }
   } else if(mode === 2 && dragMode === "moveImage"){
-    imageTransform.x += dx;
-    imageTransform.y += dy;
+    imageTransform.x = dragStartImage.x + dx;
+    imageTransform.y = dragStartImage.y + dy;
   }
   draw();
-});
+},{passive:false});
 
 canvas.addEventListener('mouseup', stopDrag);
 canvas.addEventListener('mouseleave', stopDrag);
@@ -279,7 +281,28 @@ canvas.addEventListener('wheel', e=>{
     imageTransform.scale *= delta;
     draw();
   }
-}, { passive:false });
+},{passive:false});
+
+document.getElementById('backgroundUpload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    backgroundImg.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('overlayUpload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    overlayImg.src = evt.target.result;
+    imageTransform = { x: 0, y: 0, scale: 1 };
+  };
+  reader.readAsDataURL(file);
+});
 
 function drawBackground(){
   if(!backgroundImg.complete) return;  
