@@ -322,6 +322,7 @@ let dragStart = null;
 let panStart = null;
 let zoomDistStart = 0;
 let zoomValStart = 1;
+let radiusStart = 0;
 let lastTouches = [];
 
 function getCanvasCoords(clientX, clientY) {
@@ -344,6 +345,13 @@ function insideCircle(pos, circle) {
   return distance(pos, circle) < circle.radius;
 }
 
+function getTouchCenter(t1, t2) {
+  return {
+    x: (t1.x + t2.x) / 2,
+    y: (t1.y + t2.y) / 2
+  };
+}
+
 /* Mouse & Touch Events */
 canvas.addEventListener('mousedown', handleStart);
 canvas.addEventListener('mousemove', handleMove);
@@ -361,13 +369,30 @@ function handleStart(e) {
   if (e.touches && e.touches.length === 1) {
     pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
   } else if (e.touches && e.touches.length === 2) {
-    // Pinch zoom
-    if (state.upper.mode === 'zoom') {
-      const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
-      const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
+    // Zwei-Finger-Geste
+    const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+    const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
+    const center = getTouchCenter(t1, t2);
+    
+    // Prüfe, welcher Kreis betroffen ist
+    if (insideCircle(center, state.upper)) {
+      activeCircle = 'upper';
+      if (state.upper.mode === 'zoom') {
+        // Zoom für Bildinhalt
+        lastTouches = [t1, t2];
+        zoomDistStart = distance(t1, t2);
+        zoomValStart = state.upper.zoom;
+      } else {
+        // Kreisgröße ändern (in jedem anderen Modus)
+        lastTouches = [t1, t2];
+        zoomDistStart = distance(t1, t2);
+        radiusStart = state.upper.radius;
+      }
+    } else if (insideCircle(center, state.lower)) {
+      activeCircle = 'lower';
       lastTouches = [t1, t2];
       zoomDistStart = distance(t1, t2);
-      zoomValStart = state.upper.zoom;
+      radiusStart = state.lower.radius;
     }
     return;
   } else if (e.clientX !== undefined) {
@@ -391,23 +416,38 @@ function handleStart(e) {
 function handleMove(e) {
   e.preventDefault();
   
-  if (!activeCircle || !dragStart) return;
+  if (!activeCircle) return;
   
-  // Handle pinch zoom
-  if (e.touches && e.touches.length === 2 && state.upper.mode === 'zoom' && activeCircle === 'upper') {
+  // Handle zwei-Finger Pinch
+  if (e.touches && e.touches.length === 2 && lastTouches.length === 2) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     
-    if (lastTouches.length === 2) {
-      const lastDist = distance(lastTouches[0], lastTouches[1]);
-      const nowDist = distance(t1, t2);
-      const scale = nowDist / lastDist;
-      state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
-      draw();
+    const lastDist = distance(lastTouches[0], lastTouches[1]);
+    const nowDist = distance(t1, t2);
+    const scale = nowDist / lastDist;
+    
+    if (activeCircle === 'upper') {
+      if (state.upper.mode === 'zoom') {
+        // Zoom für Bildinhalt
+        state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
+      } else {
+        // Kreisgröße ändern
+        state.upper.radius = clamp(state.upper.radius * scale, 30, 500);
+        document.getElementById('upperCircleRadius').value = state.upper.radius;
+      }
+    } else if (activeCircle === 'lower') {
+      // Kreisgröße für unteren Kreis
+      state.lower.radius = clamp(state.lower.radius * scale, 30, 500);
+      document.getElementById('lowerCircleRadius').value = state.lower.radius;
     }
+    
     lastTouches = [t1, t2];
+    draw();
     return;
   }
+  
+  if (!dragStart) return;
   
   let pos;
   if (e.touches && e.touches.length === 1) {
@@ -498,12 +538,32 @@ function draw() {
     ctx.closePath();
     ctx.clip();
     
-    // Bild zeichnen
+    // Cover-Modus: Bild füllt den Kreis vollständig ohne Verzerrung
     const imgAspect = state.overlayImg.width / state.overlayImg.height;
-    const circleSize = state.upper.radius * 2;
+    const circleSize = (state.upper.radius - 4) * 2;
     
-    let drawWidth = circleSize * state.upper.zoom;
-    let drawHeight = circleSize * state.upper.zoom;
+    let drawWidth, drawHeight;
+    
+    // Berechne Dimensionen im Cover-Modus
+    if (imgAspect > 1) {
+      // Querformat
+      drawHeight = circleSize * state.upper.zoom;
+      drawWidth = drawHeight * imgAspect;
+    } else {
+      // Hochformat oder quadratisch
+      drawWidth = circleSize * state.upper.zoom;
+      drawHeight = drawWidth / imgAspect;
+    }
+    
+    // Stelle sicher, dass das Bild den Kreis vollständig ausfüllt
+    if (drawWidth < circleSize) {
+      drawWidth = circleSize * state.upper.zoom;
+      drawHeight = drawWidth / imgAspect;
+    }
+    if (drawHeight < circleSize) {
+      drawHeight = circleSize * state.upper.zoom;
+      drawWidth = drawHeight * imgAspect;
+    }
     
     ctx.drawImage(
       state.overlayImg,
