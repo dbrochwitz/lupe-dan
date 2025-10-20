@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>9:16 Bild-Editor mit interaktivem Overlay</title>
+    <title>9:16 Bild-Editor mit zwei Overlays</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -109,7 +109,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>9:16 Bild-Editor mit interaktivem Overlay</h1>
+        <h1>9:16 Bild-Editor mit zwei Overlays</h1>
         
         <div class="upload-section">
             <label for="backgroundUpload">1. Hintergrundbild hochladen:</label>
@@ -117,8 +117,13 @@
         </div>
         
         <div class="upload-section">
-            <label for="overlayUpload">2. Overlay-Bild hochladen (wird kreisrund ausgeschnitten):</label>
-            <input type="file" id="overlayUpload" accept="image/*">
+            <label for="overlayUpload1">2. Erstes Overlay-Bild hochladen (kreisrund):</label>
+            <input type="file" id="overlayUpload1" accept="image/*">
+        </div>
+        
+        <div class="upload-section">
+            <label for="overlayUpload2">3. Zweites Overlay-Bild hochladen (kreisrund):</label>
+            <input type="file" id="overlayUpload2" accept="image/*">
         </div>
         
         <div class="info">
@@ -143,17 +148,27 @@
         const ctx = canvas.getContext('2d');
         
         let backgroundImg = null;
-        let overlayImg = null;
+        let overlayImg1 = null;
+        let overlayImg2 = null;
         
-        // Overlay-Eigenschaften
-        let overlay = {
+        // Zwei Overlay-Objekte
+        let overlay1 = {
             x: 540,
-            y: 960,
+            y: 600,
             radius: 150,
             rotation: 0,
             isDragging: false
         };
         
+        let overlay2 = {
+            x: 540,
+            y: 1320,
+            radius: 150,
+            rotation: 0,
+            isDragging: false
+        };
+        
+        let activeOverlay = null;
         let canvasOffset = canvas.getBoundingClientRect();
         let startX, startY;
         
@@ -183,15 +198,32 @@
             }
         });
         
-        // Overlay-Bild Upload
-        document.getElementById('overlayUpload').addEventListener('change', function(e) {
+        // Overlay 1 Upload
+        document.getElementById('overlayUpload1').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     const img = new Image();
                     img.onload = function() {
-                        overlayImg = img;
+                        overlayImg1 = img;
+                        redrawCanvas();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Overlay 2 Upload
+        document.getElementById('overlayUpload2').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        overlayImg2 = img;
                         redrawCanvas();
                     };
                     img.src = event.target.result;
@@ -201,7 +233,7 @@
         });
         
         // Hilfsfunktion: Prüfe ob Maus im Kreis ist
-        function isInsideCircle(mouseX, mouseY) {
+        function isInsideCircle(mouseX, mouseY, overlay) {
             const dx = mouseX - overlay.x;
             const dy = mouseY - overlay.y;
             return Math.sqrt(dx * dx + dy * dy) <= overlay.radius;
@@ -215,10 +247,18 @@
             const mouseX = (e.clientX - rect.left) * scaleX;
             const mouseY = (e.clientY - rect.top) * scaleY;
             
-            if (overlayImg && isInsideCircle(mouseX, mouseY)) {
-                overlay.isDragging = true;
-                startX = mouseX - overlay.x;
-                startY = mouseY - overlay.y;
+            // Prüfe Overlay 2 zuerst (liegt oben)
+            if (overlayImg2 && isInsideCircle(mouseX, mouseY, overlay2)) {
+                activeOverlay = overlay2;
+                overlay2.isDragging = true;
+                startX = mouseX - overlay2.x;
+                startY = mouseY - overlay2.y;
+                canvas.classList.add('dragging');
+            } else if (overlayImg1 && isInsideCircle(mouseX, mouseY, overlay1)) {
+                activeOverlay = overlay1;
+                overlay1.isDragging = true;
+                startX = mouseX - overlay1.x;
+                startY = mouseY - overlay1.y;
                 canvas.classList.add('dragging');
             }
         });
@@ -230,29 +270,39 @@
             const mouseX = (e.clientX - rect.left) * scaleX;
             const mouseY = (e.clientY - rect.top) * scaleY;
             
-            if (overlay.isDragging) {
-                overlay.x = mouseX - startX;
-                overlay.y = mouseY - startY;
+            if (activeOverlay && activeOverlay.isDragging) {
+                activeOverlay.x = mouseX - startX;
+                activeOverlay.y = mouseY - startY;
                 
                 // Begrenze auf Canvas
-                overlay.x = Math.max(overlay.radius, Math.min(canvas.width - overlay.radius, overlay.x));
-                overlay.y = Math.max(overlay.radius, Math.min(canvas.height - overlay.radius, overlay.y));
+                activeOverlay.x = Math.max(activeOverlay.radius, Math.min(canvas.width - activeOverlay.radius, activeOverlay.x));
+                activeOverlay.y = Math.max(activeOverlay.radius, Math.min(canvas.height - activeOverlay.radius, activeOverlay.y));
                 
                 redrawCanvas();
-            } else if (overlayImg && isInsideCircle(mouseX, mouseY)) {
-                canvas.style.cursor = 'move';
             } else {
-                canvas.style.cursor = 'default';
+                // Cursor ändern wenn über einem Kreis
+                if ((overlayImg2 && isInsideCircle(mouseX, mouseY, overlay2)) || 
+                    (overlayImg1 && isInsideCircle(mouseX, mouseY, overlay1))) {
+                    canvas.style.cursor = 'move';
+                } else {
+                    canvas.style.cursor = 'default';
+                }
             }
         });
         
         canvas.addEventListener('mouseup', function(e) {
-            overlay.isDragging = false;
+            if (activeOverlay) {
+                activeOverlay.isDragging = false;
+                activeOverlay = null;
+            }
             canvas.classList.remove('dragging');
         });
         
         canvas.addEventListener('mouseleave', function(e) {
-            overlay.isDragging = false;
+            if (activeOverlay) {
+                activeOverlay.isDragging = false;
+                activeOverlay = null;
+            }
             canvas.classList.remove('dragging');
         });
         
@@ -266,15 +316,22 @@
             const mouseX = (e.clientX - rect.left) * scaleX;
             const mouseY = (e.clientY - rect.top) * scaleY;
             
-            if (overlayImg && isInsideCircle(mouseX, mouseY)) {
+            let targetOverlay = null;
+            if (overlayImg2 && isInsideCircle(mouseX, mouseY, overlay2)) {
+                targetOverlay = overlay2;
+            } else if (overlayImg1 && isInsideCircle(mouseX, mouseY, overlay1)) {
+                targetOverlay = overlay1;
+            }
+            
+            if (targetOverlay) {
                 if (e.shiftKey) {
                     // Rotation mit Shift + Mausrad
-                    overlay.rotation += e.deltaY > 0 ? -5 : 5;
-                    overlay.rotation = overlay.rotation % 360;
+                    targetOverlay.rotation += e.deltaY > 0 ? -5 : 5;
+                    targetOverlay.rotation = targetOverlay.rotation % 360;
                 } else {
                     // Skalierung mit Mausrad
                     const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
-                    overlay.radius = Math.max(30, Math.min(500, overlay.radius * scaleFactor));
+                    targetOverlay.radius = Math.max(30, Math.min(500, targetOverlay.radius * scaleFactor));
                 }
                 redrawCanvas();
             }
@@ -291,14 +348,20 @@
                 const touchX = (e.touches[0].clientX - rect.left) * scaleX;
                 const touchY = (e.touches[0].clientY - rect.top) * scaleY;
                 
-                if (overlayImg && isInsideCircle(touchX, touchY)) {
-                    overlay.isDragging = true;
-                    startX = touchX - overlay.x;
-                    startY = touchY - overlay.y;
+                if (overlayImg2 && isInsideCircle(touchX, touchY, overlay2)) {
+                    activeOverlay = overlay2;
+                    overlay2.isDragging = true;
+                    startX = touchX - overlay2.x;
+                    startY = touchY - overlay2.y;
+                    e.preventDefault();
+                } else if (overlayImg1 && isInsideCircle(touchX, touchY, overlay1)) {
+                    activeOverlay = overlay1;
+                    overlay1.isDragging = true;
+                    startX = touchX - overlay1.x;
+                    startY = touchY - overlay1.y;
                     e.preventDefault();
                 }
             } else if (e.touches.length === 2) {
-                // Pinch für Skalierung
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 initialDistance = Math.sqrt(dx * dx + dy * dy);
@@ -307,29 +370,28 @@
         }, { passive: false });
         
         canvas.addEventListener('touchmove', function(e) {
-            if (e.touches.length === 1 && overlay.isDragging) {
+            if (e.touches.length === 1 && activeOverlay && activeOverlay.isDragging) {
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
                 const scaleY = canvas.height / rect.height;
                 const touchX = (e.touches[0].clientX - rect.left) * scaleX;
                 const touchY = (e.touches[0].clientY - rect.top) * scaleY;
                 
-                overlay.x = touchX - startX;
-                overlay.y = touchY - startY;
+                activeOverlay.x = touchX - startX;
+                activeOverlay.y = touchY - startY;
                 
-                overlay.x = Math.max(overlay.radius, Math.min(canvas.width - overlay.radius, overlay.x));
-                overlay.y = Math.max(overlay.radius, Math.min(canvas.height - overlay.radius, overlay.y));
+                activeOverlay.x = Math.max(activeOverlay.radius, Math.min(canvas.width - activeOverlay.radius, activeOverlay.x));
+                activeOverlay.y = Math.max(activeOverlay.radius, Math.min(canvas.height - activeOverlay.radius, activeOverlay.y));
                 
                 redrawCanvas();
                 e.preventDefault();
-            } else if (e.touches.length === 2 && initialDistance > 0) {
-                // Pinch-Zoom
+            } else if (e.touches.length === 2 && initialDistance > 0 && activeOverlay) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 const scaleFactor = distance / initialDistance;
                 
-                overlay.radius = Math.max(30, Math.min(500, overlay.radius * scaleFactor));
+                activeOverlay.radius = Math.max(30, Math.min(500, activeOverlay.radius * scaleFactor));
                 initialDistance = distance;
                 
                 redrawCanvas();
@@ -338,9 +400,95 @@
         }, { passive: false });
         
         canvas.addEventListener('touchend', function(e) {
-            overlay.isDragging = false;
+            if (activeOverlay) {
+                activeOverlay.isDragging = false;
+                activeOverlay = null;
+            }
             initialDistance = 0;
         });
+        
+        // Verbindungslinie zwischen zwei Kreisen zeichnen (nur außerhalb)
+        function drawConnectionLine() {
+            if (!overlayImg1 || !overlayImg2) return;
+            
+            const dx = overlay2.x - overlay1.x;
+            const dy = overlay2.y - overlay1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= overlay1.radius + overlay2.radius) return; // Kreise überlappen
+            
+            // Berechne Schnittpunkte am Rand der Kreise
+            const angle = Math.atan2(dy, dx);
+            
+            const x1 = overlay1.x + Math.cos(angle) * overlay1.radius;
+            const y1 = overlay1.y + Math.sin(angle) * overlay1.radius;
+            
+            const x2 = overlay2.x - Math.cos(angle) * overlay2.radius;
+            const y2 = overlay2.y - Math.sin(angle) * overlay2.radius;
+            
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            ctx.restore();
+        }
+        
+        // Zeichne einen Kreis mit Schatten und Outline
+        function drawCircleOverlay(overlay, img) {
+            if (!img) return;
+            
+            // Schatten zeichnen (harter Schatten)
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 8;
+            ctx.shadowOffsetY = 8;
+            
+            ctx.translate(overlay.x, overlay.y);
+            ctx.rotate(overlay.rotation * Math.PI / 180);
+            
+            // Kreis für Schatten
+            ctx.beginPath();
+            ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Bild mit Clipping
+            ctx.save();
+            ctx.translate(overlay.x, overlay.y);
+            ctx.rotate(overlay.rotation * Math.PI / 180);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            
+            const imgSize = overlay.radius * 2;
+            ctx.drawImage(
+                img,
+                -overlay.radius,
+                -overlay.radius,
+                imgSize,
+                imgSize
+            );
+            
+            ctx.restore();
+            
+            // Weiße Outline
+            ctx.save();
+            ctx.translate(overlay.x, overlay.y);
+            ctx.beginPath();
+            ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            ctx.restore();
+        }
         
         // Canvas neu zeichnen
         function redrawCanvas() {
@@ -353,59 +501,38 @@
                 ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
             }
             
-            // Overlay-Bild kreisrund mit Rotation zeichnen
-            if (overlayImg) {
-                ctx.save();
-                
-                // Zum Mittelpunkt des Overlays verschieben
-                ctx.translate(overlay.x, overlay.y);
-                
-                // Rotation anwenden
-                ctx.rotate(overlay.rotation * Math.PI / 180);
-                
-                // Kreis als Clipping-Pfad
-                ctx.beginPath();
-                ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.clip();
-                
-                // Bild zeichnen
-                const imgSize = overlay.radius * 2;
-                ctx.drawImage(
-                    overlayImg,
-                    -overlay.radius,
-                    -overlay.radius,
-                    imgSize,
-                    imgSize
-                );
-                
-                ctx.restore();
-                
-                // Doppelt so dicker Rand um den Kreis (8px statt 4px)
-                ctx.save();
-                ctx.translate(overlay.x, overlay.y);
-                ctx.beginPath();
-                ctx.arc(0, 0, overlay.radius, 0, Math.PI * 2);
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 8;
-                ctx.stroke();
-                ctx.restore();
-            }
+            // Verbindungslinie zwischen Kreisen
+            drawConnectionLine();
+            
+            // Overlay 1 zeichnen
+            drawCircleOverlay(overlay1, overlayImg1);
+            
+            // Overlay 2 zeichnen
+            drawCircleOverlay(overlay2, overlayImg2);
         }
         
         // Canvas zurücksetzen
         function resetCanvas() {
             backgroundImg = null;
-            overlayImg = null;
-            overlay = {
+            overlayImg1 = null;
+            overlayImg2 = null;
+            overlay1 = {
                 x: 540,
-                y: 960,
+                y: 600,
+                radius: 150,
+                rotation: 0,
+                isDragging: false
+            };
+            overlay2 = {
+                x: 540,
+                y: 1320,
                 radius: 150,
                 rotation: 0,
                 isDragging: false
             };
             document.getElementById('backgroundUpload').value = '';
-            document.getElementById('overlayUpload').value = '';
+            document.getElementById('overlayUpload1').value = '';
+            document.getElementById('overlayUpload2').value = '';
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
