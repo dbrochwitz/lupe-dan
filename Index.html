@@ -213,7 +213,7 @@ let state = {
     imgOffsetX: 0, 
     imgOffsetY: 0, 
     zoom: 1.5,
-    rotation: 0,  // NEU: Rotation in Grad
+    rotation: 0,
     minZoom: 1.0, 
     maxZoom: 4.5
   },
@@ -381,6 +381,21 @@ canvas.addEventListener('touchmove', handleMove, {passive: false});
 canvas.addEventListener('touchend', handleEnd, {passive: false});
 
 function handleStart(e) {
+  // Bei einem Finger außerhalb der Kreise: normales Scrolling erlauben
+  if (e.touches && e.touches.length === 1) {
+    const pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+    
+    // Prüfe ob Touch in einem Kreis ist
+    const inUpperCircle = insideCircle(pos, state.upper);
+    const inLowerCircle = insideCircle(pos, state.lower);
+    
+    // Wenn außerhalb beider Kreise: Scrolling erlauben (preventDefault NICHT aufrufen)
+    if (!inUpperCircle && !inLowerCircle) {
+      return; // Normale Scroll-Funktion bleibt aktiv
+    }
+  }
+  
+  // Ansonsten preventDefault für Canvas-Interaktionen
   e.preventDefault();
   
   let pos;
@@ -393,7 +408,7 @@ function handleStart(e) {
       pos = getCanvasCoords(e.clientX, e.clientY);
     }
     
-    // Oberer Kreis: Kreis verschieben (nicht Bildinhalt)
+    // Oberer Kreis: Kreis verschieben
     if (insideCircle(pos, state.upper)) {
       activeCircle = 'upper';
       interactionMode = 'moveCircle';
@@ -425,7 +440,7 @@ function handleStart(e) {
       initialRotation = state.upper.rotation;
       initialImgOffset = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
     } 
-    // Unterer Kreis: Kreisgröße ändern (wie vorher)
+    // Unterer Kreis: Kreisgröße ändern
     else if (insideCircle(center, state.lower)) {
       activeCircle = 'lower';
       interactionMode = 'resizeCircle';
@@ -437,9 +452,12 @@ function handleStart(e) {
 }
 
 function handleMove(e) {
-  e.preventDefault();
+  // Scrolling erlauben wenn keine Interaktion aktiv ist
+  if (!activeCircle) {
+    return; // Normale Scroll-Funktion bleibt aktiv
+  }
   
-  if (!activeCircle) return;
+  e.preventDefault();
   
   // ZWEI-FINGER Manipulation
   if (e.touches && e.touches.length === 2 && lastTouches.length === 2) {
@@ -472,7 +490,7 @@ function handleMove(e) {
       return;
     } 
     else if (activeCircle === 'lower' && interactionMode === 'resizeCircle') {
-      // Unterer Kreis: Größe ändern (wie vorher)
+      // Unterer Kreis: Größe ändern
       const currentDistance = distance(t1, t2);
       const scale = currentDistance / initialPinchDistance;
       state.lower.radius = clamp(panStart.radius * scale, 30, 500);
@@ -509,7 +527,9 @@ function handleMove(e) {
 }
 
 function handleEnd(e) {
-  e.preventDefault();
+  if (activeCircle) {
+    e.preventDefault();
+  }
   activeCircle = null;
   interactionMode = 'none';
   dragStart = null;
