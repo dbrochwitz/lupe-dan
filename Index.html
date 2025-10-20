@@ -1,300 +1,557 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>9:16 Bild-Editor – Bildausschnitt steuerbar</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #f5f5f5;
-    max-width: 800px;
-    margin: 20px auto;
-    padding: 20px;
-  }
-  .container {
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    padding: 30px;
-  }
-  h1 { text-align: center; }
-  #canvasWrapper { text-align: center; }
-  canvas {
-    border: 2px solid #ddd;
-    border-radius: 5px;
-    max-width: 100%;
-    background: #fff;
-    cursor: default;
-  }
-  canvas.dragging { cursor: move; }
-  button {
-    background: #4CAF50;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    margin: 5px;
-    cursor: pointer;
-  }
-  button.secondary { background: #2196F3; }
-</style>
+  <meta charset="UTF-8" />
+  <title>9:16 Kompositionstool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ececec;
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto 2em auto;
+      background: #fff;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+      border-radius: 24px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.5em;
+      margin-bottom: 0.75em;
+      margin-top: 0.5em;
+    }
+    #canvasContainer {
+      width: 100%;
+      max-width: 400px;
+      border: 2px solid #bbb;
+      border-radius: 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.14);
+      background: #eee;
+      margin-bottom: 1em;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 20px;
+      touch-action: none;
+      user-select: none;
+      background: #f5f5f5;
+    }
+    .controls {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .upload-controls {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .upload-controls label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .upload-controls input[type="file"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .circle-controls {
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      align-items: center;
+    }
+    .circle-group {
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .circle-group span {
+      font-weight:500;
+      margin-right:6px;
+      min-width: 100%;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .circle-group button, .circle-group input[type="range"] {
+      min-width: 48px;
+      min-height: 48px;
+      font-size: 0.9em;
+      border-radius: 8px;
+      margin: 2px;
+      border: 1px solid #ccc;
+      background: #f7f7f7;
+      color: #333;
+      cursor: pointer;
+      outline: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+      transition: background 0.2s, border 0.2s;
+    }
+    .circle-group button.active {
+      background: #3bc654;
+      color: #fff;
+      border: 2px solid #2ea142;
+      font-weight: bold;
+    }
+    .circle-group button {
+      padding: 0 12px;
+      height: 48px;
+    }
+    input[type="range"] {
+      width: 140px;
+    }
+    .main-actions {
+      margin: 15px 0 4px 0;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .main-actions button {
+      min-width: 100px;
+      min-height: 48px;
+      font-size: 1.09em;
+      border-radius: 8px;
+      margin: 5px 3px;
+      padding: 7px 20px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.09);
+      transition: background 0.2s;
+    }
+    .main-actions .primary { background: #3bc654; color: #fff;}
+    .main-actions .secondary { background: #3687eb; color: #fff;}
+    @media (max-width: 540px) {
+      .container {
+        border-radius: 0;
+        padding: 12px;
+      }
+      #canvasContainer {
+        max-width: 95vw;
+        border-radius: 12px;
+      }
+    }
+  </style>
 </head>
 <body>
-<div class="container">
-  <h1>9:16 Bild-Editor</h1>
-  <div>
-    <label>Hintergrundbild:</label>
-    <input type="file" id="backgroundUpload" accept="image/*"><br>
-    <label>Overlay-Bild (oberer Kreis):</label>
-    <input type="file" id="overlayUpload1" accept="image/*">
+  <div class="container">
+    <h1>9:16 Komposition erstellen</h1>
+    <div id="canvasContainer">
+      <canvas id="compositionCanvas"></canvas>
+    </div>
+    <div class="controls">
+      <div class="upload-controls">
+        <label>
+          Hintergrundbild:
+          <input type="file" id="backgroundUpload" accept="image/*" />
+        </label>
+        <label>
+          Overlay-Bild:
+          <input type="file" id="overlayUpload" accept="image/*" />
+        </label>
+      </div>
+      <div class="circle-controls">
+        <div class="circle-group" id="upperCircleControls">
+          <span>Overlay-Kreis:</span>
+          <button id="moveUpperCircle" class="active">Verschieben</button>
+          <button id="panImage">Bild-Ausschnitt</button>
+          <button id="zoomImage">Zoom</button>
+          <input type="range" id="upperCircleRadius" min="30" max="500" value="170"/>
+        </div>
+        <div class="circle-group" id="lowerCircleControls">
+          <span>Unterer Kreis:</span>
+          <button id="moveLowerCircle" class="active">Verschieben</button>
+          <input type="range" id="lowerCircleRadius" min="30" max="500" value="120"/>
+        </div>
+      </div>
+      <div class="main-actions">
+        <button id="resetBtn" class="secondary">Zurücksetzen</button>
+        <button id="downloadBtn" class="primary">Download PNG</button>
+      </div>
+    </div>
   </div>
-
-  <div id="canvasWrapper">
-    <canvas id="canvas" width="1080" height="1920"></canvas>
-  </div>
-
-  <div style="text-align:center">
-    <button onclick="resetCanvas()">Zurücksetzen</button>
-    <button class="secondary" onclick="downloadImage()">Download</button>
-  </div>
-</div>
-
-<script>
-const canvas = document.getElementById('canvas');
+  <script>
+/* Canvas Setup */
+const canvas = document.getElementById('compositionCanvas');
 const ctx = canvas.getContext('2d');
 
-let backgroundImg = new Image();
-let overlayImg1 = new Image();
-let imagesLoaded = 0;
+// Canvas auf feste Größe setzen
+canvas.width = 1080;
+canvas.height = 1920;
 
-// === Eigenschaften der Elemente ===
-let overlay1 = {
-  x:540, y:600, radius:150, rotation:0,
-  imgOffsetX:0, imgOffsetY:0, imgScale:1,
-  isDragging:false, movingImage:false
+/* Hilfsfunktionen */
+function clamp(val, min, max) { 
+  return Math.max(min, Math.min(max, val)); 
+}
+
+/* State */
+let state = {
+  bgImg: null,
+  overlayImg: null,
+  upper: {
+    x: 540, 
+    y: 700, 
+    radius: 170, 
+    mode: 'move',
+    imgOffsetX: 0, 
+    imgOffsetY: 0, 
+    zoom: 1.0,
+    minZoom: 0.5, 
+    maxZoom: 3.0
+  },
+  lower: {
+    x: 540, 
+    y: 1400, 
+    radius: 120, 
+    mode: 'move'
+  }
 };
-let overlay2 = { x:540, y:1320, radius:150, isDragging:false };
-let activeOverlay = null;
-let startX, startY;
 
-// === Zeichenfunktionen ===
-function redraw() {
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  if (backgroundImg.complete) ctx.drawImage(backgroundImg,0,0,canvas.width,canvas.height);
-
-  drawConnectionLine();
-  drawOverlay1();
-  drawOverlay2();
-}
-
-function drawConnectionLine() {
-  const dx = overlay2.x - overlay1.x;
-  const dy = overlay2.y - overlay1.y;
-  const dist = Math.sqrt(dx*dx + dy*dy);
-  if (dist <= overlay1.radius + overlay2.radius) return;
-  const angle = Math.atan2(dy, dx);
-  const x1 = overlay1.x + Math.cos(angle)*overlay1.radius;
-  const y1 = overlay1.y + Math.sin(angle)*overlay1.radius;
-  const x2 = overlay2.x - Math.cos(angle)*overlay2.radius;
-  const y2 = overlay2.y - Math.sin(angle)*overlay2.radius;
-
-  ctx.save();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 8;
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 5;
-  ctx.shadowOffsetY = 5;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-  ctx.restore();
-}
-
-// Bild im Kreis – mit Offset und Zoom
-function drawImageCover(ctx, img, circle) {
-  const r = circle.radius;
-  const iw = img.width;
-  const ih = img.height;
-  const baseScale = Math.max((r*2) / iw, (r*2) / ih);
-  const totalScale = baseScale * circle.imgScale;
-  const dw = iw * totalScale;
-  const dh = ih * totalScale;
-
-  ctx.save();
-  ctx.translate(circle.x, circle.y);
-  ctx.rotate(circle.rotation * Math.PI / 180);
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.drawImage(img, -dw/2 + circle.imgOffsetX, -dh/2 + circle.imgOffsetY, dw, dh);
-  ctx.restore();
-}
-
-function drawOverlay1() {
-  if (!overlayImg1.complete) return;
-
-  // Schatten außerhalb des Kreises
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 5;
-  ctx.shadowOffsetY = 5;
-  ctx.beginPath();
-  ctx.arc(overlay1.x, overlay1.y, overlay1.radius, 0, Math.PI*2);
-  ctx.fill();
-  ctx.restore();
-
-  // Bild mit Steuerung für Ausschnitt
-  drawImageCover(ctx, overlayImg1, overlay1);
-
-  // Outline
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(overlay1.x, overlay1.y, overlay1.radius, 0, Math.PI*2);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 8;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawOverlay2() {
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 5;
-  ctx.shadowOffsetY = 5;
-  ctx.beginPath();
-  ctx.arc(overlay2.x, overlay2.y, overlay2.radius, 0, Math.PI*2);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 8;
-  ctx.stroke();
-  ctx.restore();
-}
-
-// === Interaktion ===
-function isInsideCircle(mx, my, o) {
-  const dx = mx - o.x;
-  const dy = my - o.y;
-  return Math.sqrt(dx*dx + dy*dy) <= o.radius;
-}
-
-canvas.addEventListener('mousedown', e => {
-  const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-  if (isInsideCircle(mx,my,overlay1)) {
-    activeOverlay = overlay1;
-    startX = mx - overlay1.x;
-    startY = my - overlay1.y;
-    overlay1.isDragging = !e.shiftKey;
-    overlay1.movingImage = e.shiftKey;
-  } else if (isInsideCircle(mx,my,overlay2)) {
-    activeOverlay = overlay2;
-    startX = mx - overlay2.x;
-    startY = my - overlay2.y;
-    overlay2.isDragging = true;
-  }
-
-  if (activeOverlay) canvas.classList.add('dragging');
-});
-
-canvas.addEventListener('mousemove', e => {
-  if (!activeOverlay) return;
-  const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-  if (activeOverlay.isDragging) {
-    activeOverlay.x = mx - startX;
-    activeOverlay.y = my - startY;
-  } else if (activeOverlay.movingImage) {
-    overlay1.imgOffsetX += (mx - overlay1.x - startX) * 0.2;
-    overlay1.imgOffsetY += (my - overlay1.y - startY) * 0.2;
-  }
-
-  redraw();
-});
-
-canvas.addEventListener('mouseup', () => {
-  if (activeOverlay) {
-    activeOverlay.isDragging = false;
-    activeOverlay.movingImage = false;
-  }
-  activeOverlay = null;
-  canvas.classList.remove('dragging');
-});
-
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-  let target = null;
-  if (isInsideCircle(mx,my,overlay1)) target = overlay1;
-  else if (isInsideCircle(mx,my,overlay2)) target = overlay2;
-  if (!target) return;
-
-  if (e.ctrlKey && target === overlay1) {
-    const factor = e.deltaY > 0 ? 0.95 : 1.05;
-    target.imgScale = Math.min(Math.max(target.imgScale * factor, 0.5), 3);
-  } else if (e.shiftKey && target === overlay1) {
-    target.rotation += e.deltaY > 0 ? 5 : -5;
-  } else {
-    const factor = e.deltaY > 0 ? 0.95 : 1.05;
-    target.radius = Math.max(30, Math.min(500, target.radius * factor));
-  }
-  redraw();
-}, { passive: false });
-
-// === Uploads ===
+/* File-Handling */
 document.getElementById('backgroundUpload').addEventListener('change', e => {
   const file = e.target.files[0];
-  if (!file) return;
+  if(!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
-    const img = new Image();
-    img.onload = () => { backgroundImg = img; redraw(); };
-    img.src = ev.target.result;
+  reader.onload = (event) => {
+    let img = new Image();
+    img.onload = () => {
+      state.bgImg = img;
+      draw();
+    };
+    img.src = event.target.result;
   };
   reader.readAsDataURL(file);
 });
 
-document.getElementById('overlayUpload1').addEventListener('change', e => {
+document.getElementById('overlayUpload').addEventListener('change', e => {
   const file = e.target.files[0];
-  if (!file) return;
+  if(!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
-    const img = new Image();
-    img.onload = () => { overlayImg1 = img; redraw(); };
-    img.src = ev.target.result;
+  reader.onload = (event) => {
+    let img = new Image();
+    img.onload = () => {
+      state.overlayImg = img;
+      draw();
+    };
+    img.src = event.target.result;
   };
   reader.readAsDataURL(file);
 });
 
-// === Reset & Download ===
-function resetCanvas() {
-  overlay1 = { x:540,y:600,radius:150,rotation:0,imgOffsetX:0,imgOffsetY:0,imgScale:1,isDragging:false,movingImage:false };
-  overlay2 = { x:540,y:1320,radius:150,isDragging:false };
-  redraw();
+/* UI-Controls */
+function setUpperCircleMode(mode) {
+  state.upper.mode = mode;
+  document.getElementById('moveUpperCircle').classList.toggle('active', mode==='move');
+  document.getElementById('panImage').classList.toggle('active', mode==='pan');
+  document.getElementById('zoomImage').classList.toggle('active', mode==='zoom');
 }
 
-function downloadImage() {
-  const a = document.createElement('a');
+document.getElementById('moveUpperCircle').addEventListener('click',() => setUpperCircleMode('move'));
+document.getElementById('panImage').addEventListener('click',() => setUpperCircleMode('pan'));
+document.getElementById('zoomImage').addEventListener('click',() => setUpperCircleMode('zoom'));
+
+document.getElementById('upperCircleRadius').addEventListener('input',e=>{
+  state.upper.radius = Number(e.target.value);
+  draw();
+});
+
+document.getElementById('moveLowerCircle').addEventListener('click',()=>{
+  state.lower.mode = 'move';
+});
+
+document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
+  state.lower.radius = Number(e.target.value);
+  draw();
+});
+
+/* Reset */
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  state.upper = { 
+    x:540, y:700, radius:170, mode:'move', 
+    imgOffsetX:0, imgOffsetY:0, zoom:1.0, 
+    minZoom:0.5, maxZoom:3.0 
+  };
+  state.lower = { x:540, y:1400, radius:120, mode:'move' };
+  document.getElementById('upperCircleRadius').value = 170;
+  document.getElementById('lowerCircleRadius').value = 120;
+  setUpperCircleMode('move');
+  draw();
+});
+
+/* Download PNG */
+document.getElementById('downloadBtn').addEventListener('click',()=>{
+  let url = canvas.toDataURL("image/png");
+  let a = document.createElement('a');
+  a.href = url;
   a.download = '9-16-komposition.png';
-  a.href = canvas.toDataURL('image/png');
+  document.body.appendChild(a);
   a.click();
+  setTimeout(()=>document.body.removeChild(a),200);
+});
+
+/* Drag & Interaction */
+let activeCircle = null;
+let dragStart = null;
+let panStart = null;
+let zoomDistStart = 0;
+let zoomValStart = 1;
+let lastTouches = [];
+
+function getCanvasCoords(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
 }
 
-// === Standardbilder ===
-backgroundImg.src = 'default.jpg';
-overlayImg1.src = 'default.jpg';
-backgroundImg.onload = overlayImg1.onload = function() { imagesLoaded++; if (imagesLoaded === 2) redraw(); };
-</script>
+function distance(p1, p2) {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function insideCircle(pos, circle) {
+  return distance(pos, circle) < circle.radius;
+}
+
+/* Mouse & Touch Events */
+canvas.addEventListener('mousedown', handleStart);
+canvas.addEventListener('mousemove', handleMove);
+canvas.addEventListener('mouseup', handleEnd);
+canvas.addEventListener('mouseleave', handleEnd);
+
+canvas.addEventListener('touchstart', handleStart, {passive: false});
+canvas.addEventListener('touchmove', handleMove, {passive: false});
+canvas.addEventListener('touchend', handleEnd, {passive: false});
+
+function handleStart(e) {
+  e.preventDefault();
+  
+  let pos;
+  if (e.touches && e.touches.length === 1) {
+    pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.touches && e.touches.length === 2) {
+    // Pinch zoom
+    if (state.upper.mode === 'zoom') {
+      const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+      const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
+      lastTouches = [t1, t2];
+      zoomDistStart = distance(t1, t2);
+      zoomValStart = state.upper.zoom;
+    }
+    return;
+  } else if (e.clientX !== undefined) {
+    pos = getCanvasCoords(e.clientX, e.clientY);
+  }
+  
+  if (!pos) return;
+  
+  if (insideCircle(pos, state.upper)) {
+    activeCircle = 'upper';
+    dragStart = pos;
+    panStart = { ...state.upper };
+    zoomValStart = state.upper.zoom;
+  } else if (insideCircle(pos, state.lower)) {
+    activeCircle = 'lower';
+    dragStart = pos;
+    panStart = { ...state.lower };
+  }
+}
+
+function handleMove(e) {
+  e.preventDefault();
+  
+  if (!activeCircle || !dragStart) return;
+  
+  // Handle pinch zoom
+  if (e.touches && e.touches.length === 2 && state.upper.mode === 'zoom' && activeCircle === 'upper') {
+    const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+    const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
+    
+    if (lastTouches.length === 2) {
+      const lastDist = distance(lastTouches[0], lastTouches[1]);
+      const nowDist = distance(t1, t2);
+      const scale = nowDist / lastDist;
+      state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
+      draw();
+    }
+    lastTouches = [t1, t2];
+    return;
+  }
+  
+  let pos;
+  if (e.touches && e.touches.length === 1) {
+    pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.clientX !== undefined) {
+    pos = getCanvasCoords(e.clientX, e.clientY);
+  }
+  
+  if (!pos) return;
+  
+  if (activeCircle === 'upper') {
+    if (state.upper.mode === 'move') {
+      state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
+      state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
+    } else if (state.upper.mode === 'pan') {
+      state.upper.imgOffsetX = panStart.imgOffsetX + (pos.x - dragStart.x);
+      state.upper.imgOffsetY = panStart.imgOffsetY + (pos.y - dragStart.y);
+    } else if (state.upper.mode === 'zoom') {
+      const factor = 1 + (dragStart.y - pos.y) * 0.003;
+      state.upper.zoom = clamp(zoomValStart * factor, state.upper.minZoom, state.upper.maxZoom);
+    }
+  } else if (activeCircle === 'lower') {
+    state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
+    state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
+  }
+  
+  draw();
+}
+
+function handleEnd(e) {
+  e.preventDefault();
+  activeCircle = null;
+  dragStart = null;
+  panStart = null;
+  lastTouches = [];
+}
+
+/* Drawing */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Hintergrund
+  if (state.bgImg) {
+    ctx.drawImage(state.bgImg, 0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = "#e0e0e8";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  // Verbindungslinie (nur außerhalb der Kreise)
+  const dist = distance(state.upper, state.lower);
+  if (dist > state.upper.radius + state.lower.radius) {
+    // Berechne Startpunkt (am Rand des oberen Kreises)
+    const angle = Math.atan2(state.lower.y - state.upper.y, state.lower.x - state.upper.x);
+    const startX = state.upper.x + Math.cos(angle) * state.upper.radius;
+    const startY = state.upper.y + Math.sin(angle) * state.upper.radius;
+    
+    // Berechne Endpunkt (am Rand des unteren Kreises)
+    const endX = state.lower.x - Math.cos(angle) * state.lower.radius;
+    const endY = state.lower.y - Math.sin(angle) * state.lower.radius;
+    
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    ctx.restore();
+  }
+  
+  // Unterer Kreis - nur Outline (durchsichtig)
+  drawCircleOutline(state.lower.x, state.lower.y, state.lower.radius);
+  
+  // Oberer Kreis - zuerst weiße Füllung, dann Bild mit Clip, dann Outline
+  drawCircleFilled(state.upper.x, state.upper.y, state.upper.radius, "#ffffff");
+  
+  if (state.overlayImg) {
+    ctx.save();
+    
+    // Clip für Kreis (etwas kleiner als Radius für Outline-Platz)
+    ctx.beginPath();
+    ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    
+    // Bild zeichnen
+    const imgAspect = state.overlayImg.width / state.overlayImg.height;
+    const circleSize = state.upper.radius * 2;
+    
+    let drawWidth = circleSize * state.upper.zoom;
+    let drawHeight = circleSize * state.upper.zoom;
+    
+    ctx.drawImage(
+      state.overlayImg,
+      state.upper.x - drawWidth/2 + state.upper.imgOffsetX,
+      state.upper.y - drawHeight/2 + state.upper.imgOffsetY,
+      drawWidth,
+      drawHeight
+    );
+    
+    ctx.restore();
+  }
+  
+  // Outline für oberen Kreis (über das Bild)
+  drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
+}
+
+// Gefüllten Kreis zeichnen (ohne Schatten)
+function drawCircleFilled(x, y, radius, fillColor) {
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Nur Outline mit Schatten zeichnen
+function drawCircleOutline(x, y, radius) {
+  ctx.save();
+  
+  // Schatten nur für die Outline
+  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 5;
+  ctx.shadowOffsetY = 5;
+  
+  // Weißer Rand
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  
+  ctx.restore();
+}
+
+/* Initial Draw */
+draw();
+  </script>
 </body>
 </html>
