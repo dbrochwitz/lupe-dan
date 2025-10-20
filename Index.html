@@ -78,7 +78,7 @@
       text-align: center;
       margin-bottom: 4px;
     }
-    .circle-group button, .circle-group input[type="range"] {
+    .circle-group input[type="range"] {
       min-width: 48px;
       min-height: 48px;
       font-size: 0.9em;
@@ -90,20 +90,9 @@
       cursor: pointer;
       outline: none;
       box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-      transition: background 0.2s, border 0.2s;
-    }
-    .circle-group button.active {
-      background: #3bc654;
-      color: #fff;
-      border: 2px solid #2ea142;
-      font-weight: bold;
-    }
-    .circle-group button {
-      padding: 0 12px;
-      height: 48px;
     }
     input[type="range"] {
-      width: 140px;
+      width: 200px;
     }
     .main-actions {
       margin: 15px 0 15px 0;
@@ -177,15 +166,11 @@
       </div>
       <div class="circle-controls">
         <div class="circle-group" id="upperCircleControls">
-          <span>Overlay-Kreis:</span>
-          <button id="moveUpperCircle" class="active">Verschieben</button>
-          <button id="panImage">Bild-Ausschnitt</button>
-          <button id="zoomImage">Zoom</button>
-          <input type="range" id="upperCircleRadius" min="50" max="300" value="100" step="1"/>
+          <span>Overlay-Kreis Zoom:</span>
+          <input type="range" id="upperCircleRadius" min="100" max="300" value="100" step="1"/>
         </div>
         <div class="circle-group" id="lowerCircleControls">
-          <span>Unterer Kreis:</span>
-          <button id="moveLowerCircle" class="active">Verschieben</button>
+          <span>Unterer Kreis Größe:</span>
           <input type="range" id="lowerCircleRadius" min="30" max="500" value="120"/>
         </div>
       </div>
@@ -221,20 +206,21 @@ let state = {
     x: 540, 
     y: 700, 
     radius: 170, 
-    mode: 'move',
     imgOffsetX: 0, 
     imgOffsetY: 0, 
     zoom: 1.0,
-    minZoom: 0.5, 
+    minZoom: 1.0, 
     maxZoom: 3.0
   },
   lower: {
     x: 540, 
     y: 1400, 
-    radius: 120, 
-    mode: 'move'
+    radius: 120
   }
 };
+
+/* Interaktionsmodus - wird dynamisch erkannt */
+let interactionMode = 'move'; // 'move', 'pan', oder 'zoom'
 
 /* Default-Bilder laden beim Start */
 function loadDefaultImages() {
@@ -298,25 +284,10 @@ document.getElementById('overlayUpload').addEventListener('change', e => {
 });
 
 /* UI-Controls */
-function setUpperCircleMode(mode) {
-  state.upper.mode = mode;
-  document.getElementById('moveUpperCircle').classList.toggle('active', mode==='move');
-  document.getElementById('panImage').classList.toggle('active', mode==='pan');
-  document.getElementById('zoomImage').classList.toggle('active', mode==='zoom');
-}
-
-document.getElementById('moveUpperCircle').addEventListener('click',() => setUpperCircleMode('move'));
-document.getElementById('panImage').addEventListener('click',() => setUpperCircleMode('pan'));
-document.getElementById('zoomImage').addEventListener('click',() => setUpperCircleMode('zoom'));
-
-// Schieberegler für oberen Kreis steuert jetzt den Bild-Zoom
+// Schieberegler für oberen Kreis steuert den Bild-Zoom (100-300%)
 document.getElementById('upperCircleRadius').addEventListener('input',e=>{
   state.upper.zoom = Number(e.target.value) / 100;
   draw();
-});
-
-document.getElementById('moveLowerCircle').addEventListener('click',()=>{
-  state.lower.mode = 'move';
 });
 
 document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
@@ -327,14 +298,13 @@ document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
 /* Reset */
 document.getElementById('resetBtn').addEventListener('click',()=>{
   state.upper = { 
-    x:540, y:700, radius:170, mode:'move', 
+    x:540, y:700, radius:170,
     imgOffsetX:0, imgOffsetY:0, zoom:1.0, 
-    minZoom:0.5, maxZoom:3.0 
+    minZoom:1.0, maxZoom:3.0 
   };
-  state.lower = { x:540, y:1400, radius:120, mode:'move' };
+  state.lower = { x:540, y:1400, radius:120 };
   document.getElementById('upperCircleRadius').value = 100;
   document.getElementById('lowerCircleRadius').value = 120;
-  setUpperCircleMode('move');
   draw();
 });
 
@@ -401,6 +371,19 @@ function handleStart(e) {
   let pos;
   if (e.touches && e.touches.length === 1) {
     pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+    // Ein-Finger-Touch: Kreis verschieben oder Bildausschnitt verschieben
+    if (insideCircle(pos, state.upper)) {
+      activeCircle = 'upper';
+      dragStart = pos;
+      panStart = { ...state.upper };
+      // Standard: Bild-Ausschnitt verschieben (pan)
+      interactionMode = 'pan';
+    } else if (insideCircle(pos, state.lower)) {
+      activeCircle = 'lower';
+      dragStart = pos;
+      panStart = { ...state.lower };
+      interactionMode = 'move';
+    }
   } else if (e.touches && e.touches.length === 2) {
     // Zwei-Finger-Geste
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
@@ -410,39 +393,32 @@ function handleStart(e) {
     // Prüfe, welcher Kreis betroffen ist
     if (insideCircle(center, state.upper)) {
       activeCircle = 'upper';
-      if (state.upper.mode === 'zoom') {
-        // Zoom für Bildinhalt
-        lastTouches = [t1, t2];
-        zoomDistStart = distance(t1, t2);
-        zoomValStart = state.upper.zoom;
-      } else {
-        // Kreisgröße ändern (in jedem anderen Modus)
-        lastTouches = [t1, t2];
-        zoomDistStart = distance(t1, t2);
-        radiusStart = state.upper.radius;
-      }
+      lastTouches = [t1, t2];
+      zoomDistStart = distance(t1, t2);
+      zoomValStart = state.upper.zoom;
+      interactionMode = 'zoom';
     } else if (insideCircle(center, state.lower)) {
       activeCircle = 'lower';
       lastTouches = [t1, t2];
       zoomDistStart = distance(t1, t2);
       radiusStart = state.lower.radius;
+      interactionMode = 'resize';
     }
     return;
   } else if (e.clientX !== undefined) {
+    // Maus: Kreis verschieben
     pos = getCanvasCoords(e.clientX, e.clientY);
-  }
-  
-  if (!pos) return;
-  
-  if (insideCircle(pos, state.upper)) {
-    activeCircle = 'upper';
-    dragStart = pos;
-    panStart = { ...state.upper };
-    zoomValStart = state.upper.zoom;
-  } else if (insideCircle(pos, state.lower)) {
-    activeCircle = 'lower';
-    dragStart = pos;
-    panStart = { ...state.lower };
+    if (insideCircle(pos, state.upper)) {
+      activeCircle = 'upper';
+      dragStart = pos;
+      panStart = { ...state.upper };
+      interactionMode = 'move';
+    } else if (insideCircle(pos, state.lower)) {
+      activeCircle = 'lower';
+      dragStart = pos;
+      panStart = { ...state.lower };
+      interactionMode = 'move';
+    }
   }
 }
 
@@ -460,16 +436,11 @@ function handleMove(e) {
     const nowDist = distance(t1, t2);
     const scale = nowDist / lastDist;
     
-    if (activeCircle === 'upper') {
-      if (state.upper.mode === 'zoom') {
-        // Zoom für Bildinhalt
-        state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
-        document.getElementById('upperCircleRadius').value = state.upper.zoom * 100;
-      } else {
-        // Kreisgröße ändern
-        state.upper.radius = clamp(state.upper.radius * scale, 30, 500);
-      }
-    } else if (activeCircle === 'lower') {
+    if (activeCircle === 'upper' && interactionMode === 'zoom') {
+      // Zoom für Bildinhalt
+      state.upper.zoom = clamp(state.upper.zoom * scale, state.upper.minZoom, state.upper.maxZoom);
+      document.getElementById('upperCircleRadius').value = state.upper.zoom * 100;
+    } else if (activeCircle === 'lower' && interactionMode === 'resize') {
       // Kreisgröße für unteren Kreis
       state.lower.radius = clamp(state.lower.radius * scale, 30, 500);
       document.getElementById('lowerCircleRadius').value = state.lower.radius;
@@ -492,18 +463,17 @@ function handleMove(e) {
   if (!pos) return;
   
   if (activeCircle === 'upper') {
-    if (state.upper.mode === 'move') {
+    if (interactionMode === 'move') {
+      // Kreis verschieben
       state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
       state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
-    } else if (state.upper.mode === 'pan') {
+    } else if (interactionMode === 'pan') {
+      // Bildausschnitt verschieben
       state.upper.imgOffsetX = panStart.imgOffsetX + (pos.x - dragStart.x);
       state.upper.imgOffsetY = panStart.imgOffsetY + (pos.y - dragStart.y);
-    } else if (state.upper.mode === 'zoom') {
-      const factor = 1 + (dragStart.y - pos.y) * 0.003;
-      state.upper.zoom = clamp(zoomValStart * factor, state.upper.minZoom, state.upper.maxZoom);
-      document.getElementById('upperCircleRadius').value = state.upper.zoom * 100;
     }
   } else if (activeCircle === 'lower') {
+    // Kreis verschieben
     state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
     state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
   }
@@ -517,6 +487,7 @@ function handleEnd(e) {
   dragStart = null;
   panStart = null;
   lastTouches = [];
+  interactionMode = 'move';
 }
 
 /* Drawing */
