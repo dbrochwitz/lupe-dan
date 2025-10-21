@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>9:16 Kompositionstool v02</title>
+  <title>PflanzenUndCo.de | #Leafporn</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
     html, body {
@@ -87,20 +87,30 @@
       background: transparent;
       cursor: pointer;
     }
-    /* Slider Track */
+    /* Slider Track - Chrome, Safari, Edge */
     input[type="range"]::-webkit-slider-track {
       width: 100%;
       height: 8px;
       background: #ddd;
       border-radius: 4px;
+      border: none;
     }
+    /* Slider Track - Firefox */
     input[type="range"]::-moz-range-track {
       width: 100%;
       height: 8px;
       background: #ddd;
       border-radius: 4px;
+      border: none;
     }
-    /* Slider Thumb */
+    /* iOS Safari - zusätzlicher Track */
+    input[type="range"]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 8px;
+      background: #ddd;
+      border-radius: 4px;
+    }
+    /* Slider Thumb - Chrome, Safari, Edge */
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
@@ -111,7 +121,9 @@
       cursor: pointer;
       margin-top: -12px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      border: none;
     }
+    /* Slider Thumb - Firefox */
     input[type="range"]::-moz-range-thumb {
       width: 32px;
       height: 32px;
@@ -121,11 +133,12 @@
       border: none;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
-    /* Active state */
+    /* Active state - Chrome, Safari, Edge */
     input[type="range"]:active::-webkit-slider-thumb {
       background: #2a6bcf;
       box-shadow: 0 3px 8px rgba(0,0,0,0.3);
     }
+    /* Active state - Firefox */
     input[type="range"]:active::-moz-range-thumb {
       background: #2a6bcf;
       box-shadow: 0 3px 8px rgba(0,0,0,0.3);
@@ -244,7 +257,7 @@ function clamp(val, min, max) {
 let state = {
   bgImg: null,
   overlayImg: null,
-  watermarkImg: null,  // NEU: Wasserzeichen
+  watermarkImg: null,
   upper: {
     x: 540, 
     y: 700, 
@@ -726,14 +739,14 @@ function draw() {
   drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
   
   // Wasserzeichen in linker oberer Ecke (20px Abstand, 50% kleiner, 50% transparent)
-if (state.watermarkImg) {
-  ctx.save();
-  ctx.globalAlpha = 0.2;
-  const wmWidth = state.watermarkImg.width * 0.5;
-  const wmHeight = state.watermarkImg.height * 0.5;
-  ctx.drawImage(state.watermarkImg, 20, 100, wmWidth, wmHeight);
-  ctx.restore();
-}
+  if (state.watermarkImg) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    const wmWidth = state.watermarkImg.width * 0.5;
+    const wmHeight = state.watermarkImg.height * 0.5;
+    ctx.drawImage(state.watermarkImg, 20, 20, wmWidth, wmHeight);
+    ctx.restore();
+  }
 }
 
 function drawCircleFilled(x, y, radius, fillColor) {
