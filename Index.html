@@ -53,7 +53,7 @@
       width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
-      border-radius: 8px;
+      border-radius: 6px;
     }
     .circle-controls {
       margin-bottom: 14px;
@@ -70,6 +70,7 @@
       gap: 10px;
       flex-wrap: wrap;
       justify-content: center;
+      width: 100%;
     }
     .circle-group span {
       font-weight:500;
@@ -78,21 +79,56 @@
       text-align: center;
       margin-bottom: 4px;
     }
-    .circle-group input[type="range"] {
-      min-width: 48px;
-      min-height: 48px;
-      font-size: 0.9em;
-      border-radius: 8px;
-      margin: 2px;
-      border: 1px solid #ccc;
-      background: #f7f7f7;
-      color: #333;
-      cursor: pointer;
-      outline: none;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-    }
     input[type="range"] {
-      width: 200px;
+      width: 100%;
+      height: 48px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    /* Slider Track */
+    input[type="range"]::-webkit-slider-track {
+      width: 100%;
+      height: 8px;
+      background: #ddd;
+      border-radius: 4px;
+    }
+    input[type="range"]::-moz-range-track {
+      width: 100%;
+      height: 8px;
+      background: #ddd;
+      border-radius: 4px;
+    }
+    /* Slider Thumb */
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 32px;
+      height: 32px;
+      background: #3687eb;
+      border-radius: 50%;
+      cursor: pointer;
+      margin-top: -12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 32px;
+      height: 32px;
+      background: #3687eb;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    /* Active state */
+    input[type="range"]:active::-webkit-slider-thumb {
+      background: #2a6bcf;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+    }
+    input[type="range"]:active::-moz-range-thumb {
+      background: #2a6bcf;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
     }
     .main-actions {
       margin: 15px 0 15px 0;
@@ -238,6 +274,9 @@ let initialZoom = 1;
 let initialRotation = 0;
 let initialImgOffset = {x: 0, y: 0};
 
+/* Mausrad-Variablen */
+let lastClickedCircle = null;
+
 /* Default-Bilder laden beim Start */
 function loadDefaultImages() {
   // Hintergrundbild laden
@@ -326,27 +365,27 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
   document.getElementById('upperCircleZoom').value = 150;
   document.getElementById('upperCircleRadius').value = 400;
   document.getElementById('lowerCircleRadius').value = 120;
+  lastClickedCircle = null;
   draw();
 });
 
-/* Download PNG - funktioniert auf Desktop und Mobile */
+/* Download PNG - funktioniert auch mit Firefox Popup-Blocker */
 document.getElementById('downloadBtn').addEventListener('click',()=>{
-  let url = canvas.toDataURL("image/png");
-  
-  // Versuche neuen Tab zu öffnen (funktioniert auf Desktop)
-  let newWindow = window.open();
-  if (newWindow) {
-    newWindow.document.write('<img src="' + url + '" style="max-width:100%;height:auto;" />');
-    newWindow.document.title = '9-16-komposition.png';
-  } else {
-    // Fallback: Download-Link wenn Popup blockiert
-    let a = document.createElement('a');
+  canvas.toBlob((blob) => {
+    // Blob-basierter Download funktioniert auch bei Popup-Blockern
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url;
     a.download = '9-16-komposition.png';
     document.body.appendChild(a);
     a.click();
-    setTimeout(()=>document.body.removeChild(a),200);
-  }
+    
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }, 'image/png');
 });
 
 /* Hilfsfunktionen für Touch/Mouse */
@@ -381,6 +420,44 @@ function getTouchAngle(t1, t2) {
   return Math.atan2(t2.y - t1.y, t2.x - t1.x) * 180 / Math.PI;
 }
 
+/* Mausrad Event für Zoom/Radius */
+canvas.addEventListener('wheel', handleWheel, {passive: false});
+
+function handleWheel(e) {
+  e.preventDefault();
+  
+  const pos = getCanvasCoords(e.clientX, e.clientY);
+  const delta = -Math.sign(e.deltaY);
+  
+  const overUpper = insideCircle(pos, state.upper);
+  const overLower = insideCircle(pos, state.lower);
+  
+  if (overUpper) {
+    const zoomStep = 5;
+    const newZoomPercent = clamp((state.upper.zoom * 100) + (delta * zoomStep), 100, 450);
+    state.upper.zoom = newZoomPercent / 100;
+    document.getElementById('upperCircleZoom').value = newZoomPercent;
+    draw();
+  } else if (overLower) {
+    const radiusStep = 10;
+    state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
+    document.getElementById('lowerCircleRadius').value = state.lower.radius;
+    draw();
+  }
+  else if (lastClickedCircle === 'upper') {
+    const zoomStep = 5;
+    const newZoomPercent = clamp((state.upper.zoom * 100) + (delta * zoomStep), 100, 450);
+    state.upper.zoom = newZoomPercent / 100;
+    document.getElementById('upperCircleZoom').value = newZoomPercent;
+    draw();
+  } else if (lastClickedCircle === 'lower') {
+    const radiusStep = 10;
+    state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
+    document.getElementById('lowerCircleRadius').value = state.lower.radius;
+    draw();
+  }
+}
+
 /* Event Handlers */
 canvas.addEventListener('mousedown', handleStart);
 canvas.addEventListener('mousemove', handleMove);
@@ -392,26 +469,21 @@ canvas.addEventListener('touchmove', handleMove, {passive: false});
 canvas.addEventListener('touchend', handleEnd, {passive: false});
 
 function handleStart(e) {
-  // Bei einem Finger außerhalb der Kreise: normales Scrolling erlauben
   if (e.touches && e.touches.length === 1) {
     const pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     
-    // Prüfe ob Touch in einem Kreis ist
     const inUpperCircle = insideCircle(pos, state.upper);
     const inLowerCircle = insideCircle(pos, state.lower);
     
-    // Wenn außerhalb beider Kreise: Scrolling erlauben (preventDefault NICHT aufrufen)
     if (!inUpperCircle && !inLowerCircle) {
-      return; // Normale Scroll-Funktion bleibt aktiv
+      return;
     }
   }
   
-  // Ansonsten preventDefault für Canvas-Interaktionen
   e.preventDefault();
   
   let pos;
   
-  // EIN-FINGER Touch oder Maus
   if ((e.touches && e.touches.length === 1) || e.clientX !== undefined) {
     if (e.touches) {
       pos = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
@@ -419,28 +491,28 @@ function handleStart(e) {
       pos = getCanvasCoords(e.clientX, e.clientY);
     }
     
-    // Oberer Kreis: Kreis verschieben
     if (insideCircle(pos, state.upper)) {
       activeCircle = 'upper';
+      lastClickedCircle = 'upper';
       interactionMode = 'moveCircle';
       dragStart = pos;
       panStart = { x: state.upper.x, y: state.upper.y };
     } 
-    // Unterer Kreis: Kreis verschieben
     else if (insideCircle(pos, state.lower)) {
       activeCircle = 'lower';
+      lastClickedCircle = 'lower';
       interactionMode = 'moveCircle';
       dragStart = pos;
       panStart = { x: state.lower.x, y: state.lower.y };
+    } else {
+      lastClickedCircle = null;
     }
   } 
-  // ZWEI-FINGER Touch
   else if (e.touches && e.touches.length === 2) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     const center = getTouchCenter(t1, t2);
     
-    // Oberer Kreis: Bild manipulieren (Zoom, Rotation, Panning)
     if (insideCircle(center, state.upper)) {
       activeCircle = 'upper';
       interactionMode = 'manipulateImage';
@@ -451,7 +523,6 @@ function handleStart(e) {
       initialRotation = state.upper.rotation;
       initialImgOffset = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
     } 
-    // Unterer Kreis: Kreisgröße ändern
     else if (insideCircle(center, state.lower)) {
       activeCircle = 'lower';
       interactionMode = 'resizeCircle';
@@ -463,35 +534,29 @@ function handleStart(e) {
 }
 
 function handleMove(e) {
-  // Scrolling erlauben wenn keine Interaktion aktiv ist
   if (!activeCircle) {
-    return; // Normale Scroll-Funktion bleibt aktiv
+    return;
   }
   
   e.preventDefault();
   
-  // ZWEI-FINGER Manipulation
   if (e.touches && e.touches.length === 2 && lastTouches.length === 2) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     
     if (activeCircle === 'upper' && interactionMode === 'manipulateImage') {
-      // Berechne Änderungen
       const currentDistance = distance(t1, t2);
       const currentAngle = getTouchAngle(t1, t2);
       const currentCenter = getTouchCenter(t1, t2);
       const lastCenter = getTouchCenter(lastTouches[0], lastTouches[1]);
       
-      // ZOOM (Pinch)
       const zoomScale = currentDistance / initialPinchDistance;
       state.upper.zoom = clamp(initialZoom * zoomScale, state.upper.minZoom, state.upper.maxZoom);
       document.getElementById('upperCircleZoom').value = state.upper.zoom * 100;
       
-      // ROTATION
       const angleDelta = currentAngle - initialPinchAngle;
       state.upper.rotation = initialRotation + angleDelta;
       
-      // PANNING (Bildverschiebung)
       const panDeltaX = currentCenter.x - lastCenter.x;
       const panDeltaY = currentCenter.y - lastCenter.y;
       state.upper.imgOffsetX = initialImgOffset.x + (currentCenter.x - getTouchCenter(lastTouches[0], lastTouches[1]).x);
@@ -501,7 +566,6 @@ function handleMove(e) {
       return;
     } 
     else if (activeCircle === 'lower' && interactionMode === 'resizeCircle') {
-      // Unterer Kreis: Größe ändern
       const currentDistance = distance(t1, t2);
       const scale = currentDistance / initialPinchDistance;
       state.lower.radius = clamp(panStart.radius * scale, 30, 500);
@@ -511,7 +575,6 @@ function handleMove(e) {
     }
   }
   
-  // EIN-FINGER Bewegung (Kreis verschieben)
   if (!dragStart) return;
   
   let pos;
@@ -525,11 +588,9 @@ function handleMove(e) {
   
   if (interactionMode === 'moveCircle') {
     if (activeCircle === 'upper') {
-      // Oberen Kreis verschieben
       state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
       state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
     } else if (activeCircle === 'lower') {
-      // Unteren Kreis verschieben
       state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
       state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
     }
@@ -552,7 +613,7 @@ function handleEnd(e) {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Hintergrund - Cover-Modus (füllt Canvas ohne Verzerrung)
+  // Hintergrund - Cover-Modus
   if (state.bgImg) {
     const imgAspect = state.bgImg.width / state.bgImg.height;
     const canvasAspect = canvas.width / canvas.height;
@@ -560,12 +621,10 @@ function draw() {
     let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
     
     if (imgAspect > canvasAspect) {
-      // Bild ist breiter: Höhe = Canvas-Höhe
       drawHeight = canvas.height;
       drawWidth = drawHeight * imgAspect;
       offsetX = (canvas.width - drawWidth) / 2;
     } else {
-      // Bild ist höher: Breite = Canvas-Breite
       drawWidth = canvas.width;
       drawHeight = drawWidth / imgAspect;
       offsetY = (canvas.height - drawHeight) / 2;
@@ -577,7 +636,7 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   
-  // Verbindungslinie (nur außerhalb der Kreise)
+  // Verbindungslinie
   const dist = distance(state.upper, state.lower);
   if (dist > state.upper.radius + state.lower.radius) {
     const angle = Math.atan2(state.lower.y - state.upper.y, state.lower.x - state.upper.x);
@@ -610,18 +669,15 @@ function draw() {
   if (state.overlayImg) {
     ctx.save();
     
-    // Clip für Kreis
     ctx.beginPath();
     ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     
-    // Transformationen: erst zum Kreismittelpunkt, dann rotieren
     ctx.translate(state.upper.x, state.upper.y);
     ctx.rotate(state.upper.rotation * Math.PI / 180);
     ctx.translate(-state.upper.x, -state.upper.y);
     
-    // Cover-Modus berechnen
     const imgAspect = state.overlayImg.width / state.overlayImg.height;
     const circleSize = (state.upper.radius - 4) * 2;
     
@@ -645,7 +701,6 @@ function draw() {
       drawWidth = drawHeight * imgAspect;
     }
     
-    // Bild zeichnen mit Offset
     ctx.drawImage(
       state.overlayImg,
       state.upper.x - drawWidth/2 + state.upper.imgOffsetX,
