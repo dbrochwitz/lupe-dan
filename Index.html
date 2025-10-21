@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>PflanzenUndCo.de | #Leafporn</title>
+  <title>9:16 Kompositionstool v02</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
     html, body {
@@ -100,16 +100,6 @@
       background: #ddd;
       border-radius: 4px;
     }
-    /* iOS Safari Fix */
-input[type="range"] {
-  -webkit-appearance: none;
-}
-input[type="range"]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 8px;
-  background: #ddd;
-  border-radius: 4px;
-}
     /* Slider Thumb */
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
@@ -199,6 +189,7 @@ input[type="range"]::-webkit-slider-runnable-track {
 <body>
   <div class="container">
     <h1>PflanzenUndCo.de | #Leafporn</h1>
+    
     <div class="controls">
       <div class="upload-controls">
         <label>
@@ -253,6 +244,7 @@ function clamp(val, min, max) {
 let state = {
   bgImg: null,
   overlayImg: null,
+  watermarkImg: null,  // NEU: Wasserzeichen
   upper: {
     x: 540, 
     y: 700, 
@@ -311,6 +303,17 @@ function loadDefaultImages() {
     draw();
   };
   overlayImg.src = 'default.jpg';
+  
+  // Wasserzeichen laden
+  let watermarkImg = new Image();
+  watermarkImg.onload = () => {
+    state.watermarkImg = watermarkImg;
+    draw();
+  };
+  watermarkImg.onerror = () => {
+    console.log('Wasserzeichen watermark.png nicht gefunden');
+  };
+  watermarkImg.src = 'watermark.png';
 }
 
 // Default-Bilder beim Laden der Seite laden
@@ -381,7 +384,6 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
 /* Download PNG - funktioniert auch mit Firefox Popup-Blocker */
 document.getElementById('downloadBtn').addEventListener('click',()=>{
   canvas.toBlob((blob) => {
-    // Blob-basierter Download funktioniert auch bei Popup-Blockern
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -389,7 +391,6 @@ document.getElementById('downloadBtn').addEventListener('click',()=>{
     document.body.appendChild(a);
     a.click();
     
-    // Cleanup
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
@@ -723,6 +724,16 @@ function draw() {
   
   // Outline für oberen Kreis
   drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
+  
+  // Wasserzeichen in linker oberer Ecke (20px Abstand, 50% kleiner, 50% transparent)
+if (state.watermarkImg) {
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  const wmWidth = state.watermarkImg.width * 0.5;
+  const wmHeight = state.watermarkImg.height * 0.5;
+  ctx.drawImage(state.watermarkImg, 20, 100, wmWidth, wmHeight);
+  ctx.restore();
+}
 }
 
 function drawCircleFilled(x, y, radius, fillColor) {
