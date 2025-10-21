@@ -329,15 +329,24 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
   draw();
 });
 
-/* Download PNG */
+/* Download PNG - funktioniert auf Desktop und Mobile */
 document.getElementById('downloadBtn').addEventListener('click',()=>{
   let url = canvas.toDataURL("image/png");
-  let a = document.createElement('a');
-  a.href = url;
-  a.download = '9-16-komposition.png';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>document.body.removeChild(a),200);
+  
+  // Versuche neuen Tab zu öffnen (funktioniert auf Desktop)
+  let newWindow = window.open();
+  if (newWindow) {
+    newWindow.document.write('<img src="' + url + '" style="max-width:100%;height:auto;" />');
+    newWindow.document.title = '9-16-komposition.png';
+  } else {
+    // Fallback: Download-Link wenn Popup blockiert
+    let a = document.createElement('a');
+    a.href = url;
+    a.download = '9-16-komposition.png';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>document.body.removeChild(a),200);
+  }
 });
 
 /* Hilfsfunktionen für Touch/Mouse */
