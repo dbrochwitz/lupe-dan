@@ -543,9 +543,26 @@ function handleEnd(e) {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Hintergrund
+  // Hintergrund - Cover-Modus (füllt Canvas ohne Verzerrung)
   if (state.bgImg) {
-    ctx.drawImage(state.bgImg, 0, 0, canvas.width, canvas.height);
+    const imgAspect = state.bgImg.width / state.bgImg.height;
+    const canvasAspect = canvas.width / canvas.height;
+    
+    let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
+    
+    if (imgAspect > canvasAspect) {
+      // Bild ist breiter: Höhe = Canvas-Höhe
+      drawHeight = canvas.height;
+      drawWidth = drawHeight * imgAspect;
+      offsetX = (canvas.width - drawWidth) / 2;
+    } else {
+      // Bild ist höher: Breite = Canvas-Breite
+      drawWidth = canvas.width;
+      drawHeight = drawWidth / imgAspect;
+      offsetY = (canvas.height - drawHeight) / 2;
+    }
+    
+    ctx.drawImage(state.bgImg, offsetX, offsetY, drawWidth, drawHeight);
   } else {
     ctx.fillStyle = "#e0e0e8";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -566,7 +583,7 @@ function draw() {
     ctx.shadowOffsetX = 5;
     ctx.shadowOffsetY = 5;
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 16;
+    ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineTo(endX, endY);
@@ -651,7 +668,7 @@ function drawCircleOutline(x, y, radius) {
   ctx.shadowOffsetX = 5;
   ctx.shadowOffsetY = 5;
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 16;
+  ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.stroke();
