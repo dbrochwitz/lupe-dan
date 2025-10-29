@@ -741,7 +741,7 @@ function draw() {
   // Wasserzeichen in linker oberer Ecke (20px Abstand, 50% kleiner, 50% transparent)
   if (state.watermarkImg) {
     ctx.save();
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.8;
     const wmWidth = state.watermarkImg.width * 0.5;
     const wmHeight = state.watermarkImg.height * 0.5;
     ctx.drawImage(state.watermarkImg, 20, 100, wmWidth, wmHeight);
