@@ -50,8 +50,7 @@
       font-weight: 500;
       margin-bottom: 4px;
     }
-    .upload-controls input[type="file"],
-    .upload-controls input[type="color"] {
+    .upload-controls input[type="file"] {
       width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
@@ -158,6 +157,22 @@
       background: #2a6bcf;
       box-shadow: 0 3px 8px rgba(0,0,0,0.3);
     }
+    .color-picker-section {
+      margin-top: 15px;
+      text-align: center;
+      font-weight: 500;
+    }
+    .color-picker-section label {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .color-picker-section input[type="color"] {
+      width: 60px;
+      height: 40px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
     .main-actions {
       margin: 15px 0 15px 0;
       display: flex;
@@ -230,11 +245,9 @@
         </label>
         <label>
           Text auf Bild (Enter für neue Zeile, * am Anfang für Balken):
-          <textarea id="textInput" placeholder="Text eingeben..." rows="3"></textarea>
-        </label>
-        <label>
-          Textfarbe (STRG+Klick auf Bild für Farbauswahl):
-          <input type="color" id="colorPicker" value="#ffffff" />
+          <textarea id="textInput" placeholder="Text eingeben..." rows="3">Jede Zeile
+*mit Sternchen
+macht einen Balken</textarea>
         </label>
       </div>
       <div class="circle-controls">
@@ -255,6 +268,11 @@
     
     <div id="canvasContainer">
       <canvas id="compositionCanvas"></canvas>
+    </div>
+
+    <div class="color-picker-section">
+      <label for="colorPicker">Textfarbe (STRG+Klick auf Bild):</label>
+      <input type="color" id="colorPicker" value="#ffffff" />
     </div>
 
     <div class="main-actions">
@@ -374,9 +392,17 @@ function loadDefaultImages() {
     console.log('Wasserzeichen watermark.png nicht gefunden');
   };
   watermarkImg.src = 'watermark.png';
+    // Text initialisieren nach Bildern
+  setTimeout(() => {
+    document.getElementById('textInput').dispatchEvent(new Event('input'));
+    draw();
+  }, 50);
 }
 
 loadDefaultImages();
+
+// Initial text laden
+document.getElementById('textInput').dispatchEvent(new Event('input'));
 
 /* File-Handling */
 document.getElementById('backgroundUpload').addEventListener('change', e => {
@@ -557,30 +583,27 @@ function getTouchAngle(t1, t2) {
   return Math.atan2(t2.y - t1.y, t2.x - t1.x) * 180 / Math.PI;
 }
 
-/* Finde längste Zeile (alte Funktion - wird nicht mehr verwendet) */
-function findLongestLine() {
-  let longest = null;
-  let longestWidth = 0;
-  let longestLineIndex = -1;
-  
-  for (let i = 0; i < state.text.lines.length; i++) {
-    const line = state.text.lines[i];
-    ctx.font = '900 100px "Roboto", sans-serif';
-    const lineWidth = ctx.measureText(line).width;
-    
-    if (lineWidth > longestWidth) {
-      longest = line;
-      longestWidth = lineWidth;
-      longestLineIndex = i;
-    }
-  }
-  
-  return { word: longest, lineIndex: longestLineIndex };
-}
-
 /* Berechne Schriftgröße für jede Zeile */
 function calculateLineData() {
   const lineData = [];
+  
+  // Prüfe ob es Zeilen mit Stern gibt
+  const hasAnyMarker = state.text.lines.some(line => line.startsWith('*'));
+  
+  // Wenn keine Stern-Zeilen: finde längste Zeile
+  let longestLineIndex = -1;
+  if (!hasAnyMarker) {
+    let longestWidth = 0;
+    for (let i = 0; i < state.text.lines.length; i++) {
+      const line = state.text.lines[i];
+      ctx.font = '900 100px "Roboto", sans-serif';
+      const lineWidth = ctx.measureText(line).width;
+      if (lineWidth > longestWidth) {
+        longestWidth = lineWidth;
+        longestLineIndex = i;
+      }
+    }
+  }
   
   for (let i = 0; i < state.text.lines.length; i++) {
     const line = state.text.lines[i];
@@ -588,6 +611,9 @@ function calculateLineData() {
     // Prüfe ob Zeile mit * beginnt
     const hasMarker = line.startsWith('*');
     const displayText = hasMarker ? line.substring(1).trim() : line;
+    
+    // Balken wenn: Stern vorhanden ODER (keine Sterne UND längste Zeile)
+    const getBalken = hasMarker || (!hasAnyMarker && i === longestLineIndex);
     
     const charCount = displayText.length;
     const fontWeight = charCount > 10 ? 400 : 900;
@@ -599,9 +625,9 @@ function calculateLineData() {
     let minSize = 20;
     let maxSize = 300;
     
-    // Für Zeilen mit Stern: Berechne Padding (halbe Breite von "I")
+    // Für Zeilen mit Balken: Berechne Padding (halbe Breite von "I")
     let textBoxWidth = state.text.boxWidth;
-    if (hasMarker) {
+    if (getBalken) {
       // Messe "I" Breite für Padding (halbiert)
       ctx.font = `${fontWeight} 100px 'Roboto', sans-serif`;
       const iPadding = ctx.measureText('I').width / 2;
@@ -626,7 +652,7 @@ function calculateLineData() {
     
     // Berechne tatsächliches Padding für "I" (halbiert)
     ctx.font = `${fontWeight} ${fontSize}px 'Roboto', sans-serif`;
-    const actualIPadding = hasMarker ? ctx.measureText('I').width / 2 : 0;
+    const actualIPadding = getBalken ? ctx.measureText('I').width / 2 : 0;
     
     // Berechne Gesamthöhe der Zeile inkl. Spacing
     let totalLineHeight = fontSize * state.text.lineHeight;
@@ -636,7 +662,7 @@ function calculateLineData() {
       fontSize: fontSize,
       fontWeight: fontWeight,
       underlineThickness: underlineThickness,
-      isLongestWord: hasMarker,
+      isLongestWord: getBalken,
       iPadding: actualIPadding,
       totalLineHeight: totalLineHeight
     });
@@ -1057,7 +1083,7 @@ function draw() {
       const data = lineData[i];
       const textY = currentY + data.fontSize * state.text.lineHeight / 2;
       
-      // Wenn Zeile mit Stern markiert: Farbiger Balken mit schwarzem Text
+      // Wenn Zeile markiert oder längste Zeile: Farbiger Balken mit schwarzem Text
       if (data.isLongestWord) {
         // Balken mit hartem Schatten - oben iPadding/2, unten iPadding/4
         ctx.shadowColor = "#000000";
