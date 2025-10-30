@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>PflanzenUndCo.de | #Leafporn</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;900&display=swap" rel="stylesheet">
   <style>
     html, body {
       margin: 0;
@@ -54,6 +55,19 @@
       padding: 8px;
       border: 1px solid #ccc;
       border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .upload-controls textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-family: 'Roboto', sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 60px;
     }
     .circle-controls {
       margin-bottom: 14px;
@@ -201,7 +215,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>#Leafporn</h1>
+    <h1>PflanzenUndCo.de | #Leafporn</h1>
     
     <div class="controls">
       <div class="upload-controls">
@@ -212,6 +226,10 @@
         <label>
           Overlay-Bild:
           <input type="file" id="overlayUpload" accept="image/*" />
+        </label>
+        <label>
+          Text auf Bild (Enter für neue Zeile):
+          <textarea id="textInput" placeholder="Text eingeben..." rows="3"></textarea>
         </label>
       </div>
       <div class="circle-controls">
@@ -258,6 +276,16 @@ let state = {
   bgImg: null,
   overlayImg: null,
   watermarkImg: null,
+  text: {
+    content: '',
+    lines: [],
+    x: 540,
+    y: 960,
+    boxWidth: 600,
+    rotation: 0,
+    color: '#ffffff',
+    lineHeight: 1.1
+  },
   upper: {
     x: 540, 
     y: 700, 
@@ -277,7 +305,7 @@ let state = {
 };
 
 /* Interaktionsvariablen */
-let activeCircle = null;
+let activeElement = null;
 let interactionMode = 'none';
 let dragStart = null;
 let panStart = null;
@@ -287,13 +315,29 @@ let initialPinchAngle = 0;
 let initialZoom = 1;
 let initialRotation = 0;
 let initialImgOffset = {x: 0, y: 0};
+let initialBoxWidth = 600;
 
 /* Mausrad-Variablen */
-let lastClickedCircle = null;
+let lastClickedElement = null;
+
+/* STRG-Taste Status */
+let ctrlPressed = false;
+
+// Track STRG-Taste
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Control') {
+    ctrlPressed = true;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Control') {
+    ctrlPressed = false;
+  }
+});
 
 /* Default-Bilder laden beim Start */
 function loadDefaultImages() {
-  // Hintergrundbild laden
   let bgImg = new Image();
   bgImg.onload = () => {
     state.bgImg = bgImg;
@@ -305,7 +349,6 @@ function loadDefaultImages() {
   };
   bgImg.src = 'default.jpg';
   
-  // Overlay-Bild laden
   let overlayImg = new Image();
   overlayImg.onload = () => {
     state.overlayImg = overlayImg;
@@ -317,7 +360,6 @@ function loadDefaultImages() {
   };
   overlayImg.src = 'default.jpg';
   
-  // Wasserzeichen laden
   let watermarkImg = new Image();
   watermarkImg.onload = () => {
     state.watermarkImg = watermarkImg;
@@ -329,7 +371,6 @@ function loadDefaultImages() {
   watermarkImg.src = 'watermark.png';
 }
 
-// Default-Bilder beim Laden der Seite laden
 loadDefaultImages();
 
 /* File-Handling */
@@ -363,6 +404,15 @@ document.getElementById('overlayUpload').addEventListener('change', e => {
   reader.readAsDataURL(file);
 });
 
+// Text Input - Großbuchstaben + Trim
+document.getElementById('textInput').addEventListener('input', e => {
+  state.text.content = e.target.value;
+  state.text.lines = e.target.value.split('\n')
+    .map(line => line.trim().toUpperCase())
+    .filter(line => line.length > 0);
+  draw();
+});
+
 /* UI-Controls */
 document.getElementById('upperCircleZoom').addEventListener('input',e=>{
   state.upper.zoom = Number(e.target.value) / 100;
@@ -387,14 +437,24 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
     minZoom:1.0, maxZoom:4.5 
   };
   state.lower = { x:540, y:1400, radius:120 };
+  state.text = {
+    content: state.text.content,
+    lines: state.text.lines,
+    x: 540,
+    y: 960,
+    boxWidth: 600,
+    rotation: 0,
+    color: '#ffffff',
+    lineHeight: 1.1
+  };
   document.getElementById('upperCircleZoom').value = 150;
   document.getElementById('upperCircleRadius').value = 400;
   document.getElementById('lowerCircleRadius').value = 120;
-  lastClickedCircle = null;
+  lastClickedElement = null;
   draw();
 });
 
-/* Download PNG - funktioniert auch mit Firefox Popup-Blocker */
+/* Download PNG */
 document.getElementById('downloadBtn').addEventListener('click',()=>{
   canvas.toBlob((blob) => {
     const url = URL.createObjectURL(blob);
@@ -432,6 +492,29 @@ function insideCircle(pos, circle) {
   return distance(pos, circle) < circle.radius;
 }
 
+function insideText(pos) {
+  if (!state.text.content || state.text.lines.length === 0) return false;
+  
+  const lineData = calculateLineData();
+  let totalHeight = 0;
+  for (let i = 0; i < lineData.length; i++) {
+    totalHeight += lineData[i].totalLineHeight;
+  }
+  
+  const dx = pos.x - state.text.x;
+  const dy = pos.y - state.text.y;
+  const angle = -state.text.rotation * Math.PI / 180;
+  const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  
+  return (
+    rotatedX >= -state.text.boxWidth / 2 &&
+    rotatedX <= state.text.boxWidth / 2 &&
+    rotatedY >= -totalHeight / 2 &&
+    rotatedY <= totalHeight / 2
+  );
+}
+
 function getTouchCenter(t1, t2) {
   return {
     x: (t1.x + t2.x) / 2,
@@ -443,7 +526,92 @@ function getTouchAngle(t1, t2) {
   return Math.atan2(t2.y - t1.y, t2.x - t1.x) * 180 / Math.PI;
 }
 
-/* Mausrad Event für Zoom/Radius */
+/* Finde längste Zeile */
+function findLongestLine() {
+  let longest = null;
+  let longestWidth = 0;
+  let longestLineIndex = -1;
+  
+  for (let i = 0; i < state.text.lines.length; i++) {
+    const line = state.text.lines[i];
+    ctx.font = '900 100px "Roboto", sans-serif';
+    const lineWidth = ctx.measureText(line).width;
+    
+    if (lineWidth > longestWidth) {
+      longest = line;
+      longestWidth = lineWidth;
+      longestLineIndex = i;
+    }
+  }
+  
+  return { word: longest, lineIndex: longestLineIndex };
+}
+
+/* Berechne Schriftgröße für jede Zeile */
+function calculateLineData() {
+  const lineData = [];
+  const longestInfo = findLongestLine();
+  
+  for (let i = 0; i < state.text.lines.length; i++) {
+    const line = state.text.lines[i];
+    const charCount = line.length;
+    const fontWeight = charCount > 10 ? 400 : 900;
+    const isLongestWord = (i === longestInfo.lineIndex);
+    
+    let fontSize = 20;
+    let textWidth = 0;
+    
+    // Binäre Suche für optimale Schriftgröße
+    let minSize = 20;
+    let maxSize = 300;
+    
+    // Für längste Zeile: Berechne Padding (halbe Breite von "I")
+    let textBoxWidth = state.text.boxWidth;
+    if (isLongestWord) {
+      // Messe "I" Breite für Padding (halbiert)
+      ctx.font = `${fontWeight} 100px 'Roboto', sans-serif`;
+      const iPadding = ctx.measureText('I').width / 2;
+      textBoxWidth = state.text.boxWidth - (iPadding * 2);
+    }
+    
+    for (let j = 0; j < 20; j++) {
+      fontSize = (minSize + maxSize) / 2;
+      ctx.font = `${fontWeight} ${fontSize}px 'Roboto', sans-serif`;
+      textWidth = ctx.measureText(line).width;
+      
+      if (textWidth < textBoxWidth) {
+        minSize = fontSize;
+      } else {
+        maxSize = fontSize;
+      }
+    }
+    
+    fontSize = minSize * 0.98;
+    
+    const underlineThickness = fontWeight === 900 ? fontSize * 0.1 : fontSize * 0.05;
+    
+    // Berechne tatsächliches Padding für "I" (halbiert)
+    ctx.font = `${fontWeight} ${fontSize}px 'Roboto', sans-serif`;
+    const actualIPadding = isLongestWord ? ctx.measureText('I').width / 2 : 0;
+    
+    // Berechne Gesamthöhe der Zeile inkl. Spacing
+    let totalLineHeight = fontSize * state.text.lineHeight;
+    
+    lineData.push({
+      text: line,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      underlineThickness: underlineThickness,
+      isLongestWord: isLongestWord,
+      iPadding: actualIPadding,
+      totalLineHeight: totalLineHeight
+    });
+  }
+  
+  return lineData;
+}
+
+/* Mausrad Event */
 canvas.addEventListener('wheel', handleWheel, {passive: false});
 
 function handleWheel(e) {
@@ -454,6 +622,7 @@ function handleWheel(e) {
   
   const overUpper = insideCircle(pos, state.upper);
   const overLower = insideCircle(pos, state.lower);
+  const overText = insideText(pos);
   
   if (overUpper) {
     const zoomStep = 5;
@@ -466,17 +635,25 @@ function handleWheel(e) {
     state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
     document.getElementById('lowerCircleRadius').value = state.lower.radius;
     draw();
+  } else if (overText) {
+    const widthStep = 20;
+    state.text.boxWidth = clamp(state.text.boxWidth + (delta * widthStep), 200, 1000);
+    draw();
   }
-  else if (lastClickedCircle === 'upper') {
+  else if (lastClickedElement === 'upper') {
     const zoomStep = 5;
     const newZoomPercent = clamp((state.upper.zoom * 100) + (delta * zoomStep), 100, 450);
     state.upper.zoom = newZoomPercent / 100;
     document.getElementById('upperCircleZoom').value = newZoomPercent;
     draw();
-  } else if (lastClickedCircle === 'lower') {
+  } else if (lastClickedElement === 'lower') {
     const radiusStep = 10;
     state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
     document.getElementById('lowerCircleRadius').value = state.lower.radius;
+    draw();
+  } else if (lastClickedElement === 'text') {
+    const widthStep = 20;
+    state.text.boxWidth = clamp(state.text.boxWidth + (delta * widthStep), 200, 1000);
     draw();
   }
 }
@@ -497,8 +674,9 @@ function handleStart(e) {
     
     const inUpperCircle = insideCircle(pos, state.upper);
     const inLowerCircle = insideCircle(pos, state.lower);
+    const inText = insideText(pos);
     
-    if (!inUpperCircle && !inLowerCircle) {
+    if (!inUpperCircle && !inLowerCircle && !inText) {
       return;
     }
   }
@@ -514,21 +692,35 @@ function handleStart(e) {
       pos = getCanvasCoords(e.clientX, e.clientY);
     }
     
-    if (insideCircle(pos, state.upper)) {
-      activeCircle = 'upper';
-      lastClickedCircle = 'upper';
-      interactionMode = 'moveCircle';
+    if (insideText(pos)) {
+      activeElement = 'text';
+      lastClickedElement = 'text';
+      interactionMode = 'moveText';
       dragStart = pos;
-      panStart = { x: state.upper.x, y: state.upper.y };
+      panStart = { x: state.text.x, y: state.text.y };
+    }
+    else if (insideCircle(pos, state.upper)) {
+      activeElement = 'upper';
+      lastClickedElement = 'upper';
+      
+      if (ctrlPressed) {
+        interactionMode = 'panImage';
+        dragStart = pos;
+        panStart = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
+      } else {
+        interactionMode = 'moveCircle';
+        dragStart = pos;
+        panStart = { x: state.upper.x, y: state.upper.y };
+      }
     } 
     else if (insideCircle(pos, state.lower)) {
-      activeCircle = 'lower';
-      lastClickedCircle = 'lower';
+      activeElement = 'lower';
+      lastClickedElement = 'lower';
       interactionMode = 'moveCircle';
       dragStart = pos;
       panStart = { x: state.lower.x, y: state.lower.y };
     } else {
-      lastClickedCircle = null;
+      lastClickedElement = null;
     }
   } 
   else if (e.touches && e.touches.length === 2) {
@@ -536,8 +728,17 @@ function handleStart(e) {
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     const center = getTouchCenter(t1, t2);
     
-    if (insideCircle(center, state.upper)) {
-      activeCircle = 'upper';
+    if (insideText(center)) {
+      activeElement = 'text';
+      interactionMode = 'manipulateText';
+      lastTouches = [t1, t2];
+      initialPinchDistance = distance(t1, t2);
+      initialPinchAngle = getTouchAngle(t1, t2);
+      initialBoxWidth = state.text.boxWidth;
+      initialRotation = state.text.rotation;
+    }
+    else if (insideCircle(center, state.upper)) {
+      activeElement = 'upper';
       interactionMode = 'manipulateImage';
       lastTouches = [t1, t2];
       initialPinchDistance = distance(t1, t2);
@@ -547,7 +748,7 @@ function handleStart(e) {
       initialImgOffset = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
     } 
     else if (insideCircle(center, state.lower)) {
-      activeCircle = 'lower';
+      activeElement = 'lower';
       interactionMode = 'resizeCircle';
       lastTouches = [t1, t2];
       initialPinchDistance = distance(t1, t2);
@@ -557,7 +758,7 @@ function handleStart(e) {
 }
 
 function handleMove(e) {
-  if (!activeCircle) {
+  if (!activeElement) {
     return;
   }
   
@@ -567,11 +768,24 @@ function handleMove(e) {
     const t1 = getCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
     const t2 = getCanvasCoords(e.touches[1].clientX, e.touches[1].clientY);
     
-    if (activeCircle === 'upper' && interactionMode === 'manipulateImage') {
+    if (activeElement === 'text' && interactionMode === 'manipulateText') {
+      const currentDistance = distance(t1, t2);
+      const currentAngle = getTouchAngle(t1, t2);
+      
+      const scale = currentDistance / initialPinchDistance;
+      state.text.boxWidth = clamp(initialBoxWidth * scale, 200, 1000);
+      
+      const angleDelta = currentAngle - initialPinchAngle;
+      const newRotation = initialRotation + angleDelta;
+      state.text.rotation = Math.round(newRotation / 3) * 3;
+      
+      draw();
+      return;
+    }
+    else if (activeElement === 'upper' && interactionMode === 'manipulateImage') {
       const currentDistance = distance(t1, t2);
       const currentAngle = getTouchAngle(t1, t2);
       const currentCenter = getTouchCenter(t1, t2);
-      const lastCenter = getTouchCenter(lastTouches[0], lastTouches[1]);
       
       const zoomScale = currentDistance / initialPinchDistance;
       state.upper.zoom = clamp(initialZoom * zoomScale, state.upper.minZoom, state.upper.maxZoom);
@@ -580,15 +794,13 @@ function handleMove(e) {
       const angleDelta = currentAngle - initialPinchAngle;
       state.upper.rotation = initialRotation + angleDelta;
       
-      const panDeltaX = currentCenter.x - lastCenter.x;
-      const panDeltaY = currentCenter.y - lastCenter.y;
       state.upper.imgOffsetX = initialImgOffset.x + (currentCenter.x - getTouchCenter(lastTouches[0], lastTouches[1]).x);
       state.upper.imgOffsetY = initialImgOffset.y + (currentCenter.y - getTouchCenter(lastTouches[0], lastTouches[1]).y);
       
       draw();
       return;
     } 
-    else if (activeCircle === 'lower' && interactionMode === 'resizeCircle') {
+    else if (activeElement === 'lower' && interactionMode === 'resizeCircle') {
       const currentDistance = distance(t1, t2);
       const scale = currentDistance / initialPinchDistance;
       state.lower.radius = clamp(panStart.radius * scale, 30, 500);
@@ -610,50 +822,71 @@ function handleMove(e) {
   if (!pos) return;
   
   if (interactionMode === 'moveCircle') {
-    if (activeCircle === 'upper') {
+    if (activeElement === 'upper') {
       state.upper.x = clamp(panStart.x + (pos.x - dragStart.x), state.upper.radius, canvas.width - state.upper.radius);
       state.upper.y = clamp(panStart.y + (pos.y - dragStart.y), state.upper.radius, canvas.height - state.upper.radius);
-    } else if (activeCircle === 'lower') {
+    } else if (activeElement === 'lower') {
       state.lower.x = clamp(panStart.x + (pos.x - dragStart.x), state.lower.radius, canvas.width - state.lower.radius);
       state.lower.y = clamp(panStart.y + (pos.y - dragStart.y), state.lower.radius, canvas.height - state.lower.radius);
     }
+    draw();
+  } 
+  else if (interactionMode === 'panImage' && activeElement === 'upper') {
+    const deltaX = pos.x - dragStart.x;
+    const deltaY = pos.y - dragStart.y;
+    state.upper.imgOffsetX = panStart.x + deltaX;
+    state.upper.imgOffsetY = panStart.y + deltaY;
+    draw();
+  }
+  else if (interactionMode === 'moveText' && activeElement === 'text') {
+    state.text.x = clamp(panStart.x + (pos.x - dragStart.x), 0, canvas.width);
+    state.text.y = clamp(panStart.y + (pos.y - dragStart.y), 0, canvas.height);
     draw();
   }
 }
 
 function handleEnd(e) {
-  if (activeCircle) {
+  if (activeElement) {
     e.preventDefault();
   }
-  activeCircle = null;
+  activeElement = null;
   interactionMode = 'none';
   dragStart = null;
   panStart = null;
   lastTouches = [];
 }
 
+/* Hilfsfunktion für Hintergrundbild-Dimensionen */
+function getBackgroundDimensions() {
+  if (!state.bgImg) return null;
+  
+  const imgAspect = state.bgImg.width / state.bgImg.height;
+  const canvasAspect = canvas.width / canvas.height;
+  
+  let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
+  
+  if (imgAspect > canvasAspect) {
+    drawHeight = canvas.height;
+    drawWidth = drawHeight * imgAspect;
+    offsetX = (canvas.width - drawWidth) / 2;
+  } else {
+    drawWidth = canvas.width;
+    drawHeight = drawWidth / imgAspect;
+    offsetY = (canvas.height - drawHeight) / 2;
+  }
+  
+  return { drawWidth, drawHeight, offsetX, offsetY };
+}
+
 /* Drawing */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Hintergrund - Cover-Modus
+  // Hintergrund
+  let bgDimensions = null;
   if (state.bgImg) {
-    const imgAspect = state.bgImg.width / state.bgImg.height;
-    const canvasAspect = canvas.width / canvas.height;
-    
-    let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
-    
-    if (imgAspect > canvasAspect) {
-      drawHeight = canvas.height;
-      drawWidth = drawHeight * imgAspect;
-      offsetX = (canvas.width - drawWidth) / 2;
-    } else {
-      drawWidth = canvas.width;
-      drawHeight = drawWidth / imgAspect;
-      offsetY = (canvas.height - drawHeight) / 2;
-    }
-    
-    ctx.drawImage(state.bgImg, offsetX, offsetY, drawWidth, drawHeight);
+    bgDimensions = getBackgroundDimensions();
+    ctx.drawImage(state.bgImg, bgDimensions.offsetX, bgDimensions.offsetY, bgDimensions.drawWidth, bgDimensions.drawHeight);
   } else {
     ctx.fillStyle = "#e0e0e8";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -669,8 +902,9 @@ function draw() {
     const endY = state.lower.y - Math.sin(angle) * state.lower.radius;
     
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 10;
+    // Harter Schatten: Schwarz, keine Transparenz, kein Blur
+    ctx.shadowColor = "#000000";
+    ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 5;
     ctx.shadowOffsetY = 5;
     ctx.strokeStyle = "#ffffff";
@@ -682,13 +916,13 @@ function draw() {
     ctx.restore();
   }
   
-  // Unterer Kreis - nur Outline
+  // Unterer Kreis
   drawCircleOutline(state.lower.x, state.lower.y, state.lower.radius);
   
-  // Oberer Kreis - weiße Füllung
+  // Oberer Kreis
   drawCircleFilled(state.upper.x, state.upper.y, state.upper.radius, "#ffffff");
   
-  // Overlay-Bild mit Rotation
+  // Oberer Kreis Inhalt
   if (state.overlayImg) {
     ctx.save();
     
@@ -733,18 +967,132 @@ function draw() {
     );
     
     ctx.restore();
+    
+  } else if (state.bgImg && bgDimensions) {
+    ctx.save();
+    
+    ctx.beginPath();
+    ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    
+    const lowerCircleSourceX = state.lower.x - bgDimensions.offsetX;
+    const lowerCircleSourceY = state.lower.y - bgDimensions.offsetY;
+    
+    const scaleX = state.bgImg.width / bgDimensions.drawWidth;
+    const scaleY = state.bgImg.height / bgDimensions.drawHeight;
+    
+    const srcCenterX = lowerCircleSourceX * scaleX;
+    const srcCenterY = lowerCircleSourceY * scaleY;
+    const srcSize = (state.lower.radius * 2 / state.upper.zoom) * scaleX;
+    
+    const srcX = srcCenterX - srcSize / 2;
+    const srcY = srcCenterY - srcSize / 2;
+    
+    const upperCircleSize = (state.upper.radius - 4) * 2;
+    ctx.drawImage(
+      state.bgImg,
+      srcX, srcY, srcSize, srcSize,
+      state.upper.x - upperCircleSize/2, state.upper.y - upperCircleSize/2,
+      upperCircleSize, upperCircleSize
+    );
+    
+    ctx.restore();
   }
   
   // Outline für oberen Kreis
   drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
   
-  // Wasserzeichen in linker oberer Ecke (20px Abstand, 50% kleiner, 50% transparent)
+  // Text zeichnen mit dynamischen Größen
+  if (state.text.content && state.text.lines.length > 0) {
+    const lineData = calculateLineData();
+    
+    ctx.save();
+    ctx.translate(state.text.x, state.text.y);
+    ctx.rotate(state.text.rotation * Math.PI / 180);
+    
+    // Berechne Gesamthöhe
+    let totalHeight = 0;
+    for (let data of lineData) {
+      totalHeight += data.totalLineHeight;
+    }
+    
+    let currentY = -totalHeight / 2;
+    
+    for (let i = 0; i < lineData.length; i++) {
+      const data = lineData[i];
+      const textY = currentY + data.fontSize * state.text.lineHeight / 2;
+      
+      // Wenn längste Zeile: Farbiger Balken mit schwarzem Text
+      if (data.isLongestWord) {
+        // Balken mit hartem Schatten - oben iPadding/2, unten iPadding/4
+        ctx.shadowColor = "#000000";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        
+        const topPadding = data.iPadding / 2;
+        const bottomPadding = data.iPadding / 4;
+        const barHeight = data.fontSize + topPadding + bottomPadding;
+        ctx.fillStyle = state.text.color;
+        ctx.fillRect(
+          -state.text.boxWidth / 2,
+          textY - data.fontSize / 2 - topPadding,
+          state.text.boxWidth,
+          barHeight
+        );
+        
+        // Schatten zurücksetzen für Text
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        
+        // Text schwarz
+        ctx.font = `${data.fontWeight} ${data.fontSize}px 'Roboto', sans-serif`;
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(data.text, 0, textY);
+        
+      } else {
+        // Normaler Text mit hartem Schatten
+        ctx.font = `${data.fontWeight} ${data.fontSize}px 'Roboto', sans-serif`;
+        ctx.fillStyle = state.text.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        ctx.shadowColor = "#000000";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        
+        ctx.fillText(data.text, 0, textY);
+        
+        // Unterstrich mit Schatten - NICHT bei längster Zeile und NICHT bei letzter Zeile
+        if (i < lineData.length - 1) {
+          const underlineY = textY + data.fontSize * 0.5 - data.underlineThickness/2;
+          
+          ctx.fillRect(
+            -state.text.boxWidth / 2,
+            underlineY,
+            state.text.boxWidth,
+            data.underlineThickness
+          );
+        }
+      }
+      
+      currentY += data.totalLineHeight;
+    }
+    
+    ctx.restore();
+  }
+  
+  // Wasserzeichen - unten rechts, Transparenz 0.6, 120px vom unteren Rand, 20px vom rechten Rand
   if (state.watermarkImg) {
     ctx.save();
-    ctx.globalAlpha = 0.0;
+    ctx.globalAlpha = 0.6;
     const wmWidth = state.watermarkImg.width * 0.5;
     const wmHeight = state.watermarkImg.height * 0.5;
-    ctx.drawImage(state.watermarkImg, 20, 100, wmWidth, wmHeight);
+    ctx.drawImage(state.watermarkImg, canvas.width - wmWidth - 20, canvas.height - wmHeight - 120, wmWidth, wmHeight);
     ctx.restore();
   }
 }
@@ -760,8 +1108,9 @@ function drawCircleFilled(x, y, radius, fillColor) {
 
 function drawCircleOutline(x, y, radius) {
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.8)";
-  ctx.shadowBlur = 10;
+  // Harter Schatten
+  ctx.shadowColor = "#000000";
+  ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 5;
   ctx.shadowOffsetY = 5;
   ctx.strokeStyle = "#ffffff";
