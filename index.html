@@ -392,7 +392,8 @@ function loadDefaultImages() {
     console.log('Wasserzeichen watermark.png nicht gefunden');
   };
   watermarkImg.src = 'watermark.png';
-    // Text initialisieren nach Bildern
+  
+  // Text initialisieren nach Bildern
   setTimeout(() => {
     document.getElementById('textInput').dispatchEvent(new Event('input'));
     draw();
@@ -400,9 +401,6 @@ function loadDefaultImages() {
 }
 
 loadDefaultImages();
-
-// Initial text laden
-document.getElementById('textInput').dispatchEvent(new Event('input'));
 
 /* File-Handling */
 document.getElementById('backgroundUpload').addEventListener('change', e => {
@@ -634,12 +632,27 @@ function calculateLineData() {
       textBoxWidth = state.text.boxWidth - (iPadding * 2);
     }
     
+    // Bei letzter Zeile mit Wasserzeichen: Platz für Wasserzeichen einrechnen
+    const isLastLine = (i === state.text.lines.length - 1);
+    let textBoxWidthWithWatermark = textBoxWidth;
+    
     for (let j = 0; j < 20; j++) {
       fontSize = (minSize + maxSize) / 2;
       ctx.font = `${fontWeight} ${fontSize}px 'Roboto', sans-serif`;
       textWidth = ctx.measureText(displayText).width;
       
-      if (textWidth < textBoxWidth) {
+      // Bei letzter Zeile: reduzierter Platz für Text
+      let availableWidth = textBoxWidth;
+      if (isLastLine && state.watermarkImg) {
+        availableWidth = textBoxWidth - (fontSize * 0.95);
+        if (getBalken) {
+          ctx.font = `${fontWeight} 100px 'Roboto', sans-serif`;
+          const iPadding = ctx.measureText('I').width / 2;
+          availableWidth = state.text.boxWidth - (iPadding * 2) - (fontSize * 0.95);
+        }
+      }
+      
+      if (textWidth < availableWidth) {
         minSize = fontSize;
       } else {
         maxSize = fontSize;
@@ -664,7 +677,8 @@ function calculateLineData() {
       underlineThickness: underlineThickness,
       isLongestWord: getBalken,
       iPadding: actualIPadding,
-      totalLineHeight: totalLineHeight
+      totalLineHeight: totalLineHeight,
+      isLastLine: isLastLine
     });
   }
   
@@ -1117,7 +1131,7 @@ function draw() {
         // Normaler Text mit hartem Schatten
         ctx.font = `${data.fontWeight} ${data.fontSize}px 'Roboto', sans-serif`;
         ctx.fillStyle = state.text.color;
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         
         ctx.shadowColor = "#000000";
@@ -1125,7 +1139,10 @@ function draw() {
         ctx.shadowOffsetX = 3;
         ctx.shadowOffsetY = 3;
         
-        ctx.fillText(data.text, 0, textY);
+        // Text beginnt am linken Rand der Textbox
+        const textX = -state.text.boxWidth / 2;
+        
+        ctx.fillText(data.text, textX, textY);
         
         // Unterstrich mit Schatten - NICHT bei Stern-Zeilen und NICHT bei letzter Zeile
         if (i < lineData.length - 1) {
@@ -1140,19 +1157,30 @@ function draw() {
         }
       }
       
+         // Wasserzeichen in der letzten Zeile
+      if (data.isLastLine && state.watermarkImg) {
+        ctx.save();
+        
+        // Wasserzeichen: 90% der Schriftgröße, am rechten Rand der Textbox
+        const wmSize = data.fontSize * 0.9;
+        const wmX = state.text.boxWidth / 2 - (wmSize / 2);
+        const wmY = textY - (data.fontSize * 0.05);
+        
+        // Schatten ausschalten vor dem Zeichnen
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Wasserzeichen ohne Schatten
+        ctx.drawImage(state.watermarkImg, wmX - wmSize / 2, wmY - wmSize / 2, wmSize, wmSize);
+        
+        ctx.restore();
+      }
+      
       currentY += data.totalLineHeight;
     }
     
-    ctx.restore();
-  }
-  
-  // Wasserzeichen - unten rechts, Transparenz 0.6, 120px vom unteren Rand, 20px vom rechten Rand
-  if (state.watermarkImg) {
-    ctx.save();
-    ctx.globalAlpha = 0.6;
-    const wmWidth = state.watermarkImg.width * 0.5;
-    const wmHeight = state.watermarkImg.height * 0.5;
-    ctx.drawImage(state.watermarkImg, canvas.width - wmWidth - 20, canvas.height - wmHeight - 120, wmWidth, wmHeight);
     ctx.restore();
   }
 }
