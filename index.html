@@ -246,8 +246,8 @@
         <label>
           Text auf Bild (Enter für neue Zeile, * am Anfang für Balken):
           <textarea id="textInput" placeholder="Text eingeben..." rows="3">Jede Zeile
-*mit * vorn
-=Balken</textarea>
+*mit Sternchen
+macht einen Balken</textarea>
         </label>
       </div>
       <div class="circle-controls">
@@ -1102,7 +1102,7 @@ function draw() {
       if (data.isLongestWord) {
         // Balken mit hartem Schatten - oben iPadding/2, unten iPadding/4
         ctx.shadowColor = "#000000";
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 2;
         ctx.shadowOffsetX = 3;
         ctx.shadowOffsetY = 3;
         
@@ -1136,7 +1136,7 @@ function draw() {
         ctx.textBaseline = 'middle';
         
         ctx.shadowColor = "#000000";
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 2;
         ctx.shadowOffsetX = 3;
         ctx.shadowOffsetY = 3;
         
