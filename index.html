@@ -251,17 +251,17 @@ macht einen Balken</textarea>
         </label>
       </div>
       <div class="circle-controls">
-        <div class="circle-group" id="lowerCircleControls">
-          <span>Unterer Kreis Größe:</span>
-          <input type="range" id="lowerCircleRadius" min="30" max="500" value="120"/>
-        </div>
         <div class="circle-group" id="upperCircleControls">
-          <span>Overlay-Kreis Bild-Zoom:</span>
-          <input type="range" id="upperCircleZoom" min="100" max="450" value="150" step="1"/>
+          <span>Oberer Kreis Größe:</span>
+          <input type="range" id="upperCircleRadius" min="30" max="500" value="120"/>
         </div>
-        <div class="circle-group" id="upperCircleSizeControls">
-          <span>Overlay-Kreis Größe:</span>
-          <input type="range" id="upperCircleRadius" min="30" max="500" value="400"/>
+        <div class="circle-group" id="lowerCircleControls">
+          <span>Unterer Kreis Bild-Zoom:</span>
+          <input type="range" id="lowerCircleZoom" min="100" max="450" value="150" step="1"/>
+        </div>
+        <div class="circle-group" id="lowerCircleSizeControls">
+          <span>Unterer Kreis Größe:</span>
+          <input type="range" id="lowerCircleRadius" min="30" max="500" value="400"/>
         </div>
       </div>
     </div>
@@ -311,8 +311,8 @@ let state = {
   },
   upper: {
     x: 540, 
-    y: 700, 
-    radius: 400,
+    y: 400, 
+    radius: 120,
     imgOffsetX: 0, 
     imgOffsetY: 0, 
     zoom: 1.5,
@@ -323,7 +323,13 @@ let state = {
   lower: {
     x: 540, 
     y: 1400, 
-    radius: 120
+    radius: 400,
+    imgOffsetX: 0, 
+    imgOffsetY: 0, 
+    zoom: 1.5,
+    rotation: 0,
+    minZoom: 1.0, 
+    maxZoom: 4.5
   }
 };
 
@@ -469,13 +475,8 @@ canvas.addEventListener('click', e => {
 });
 
 /* UI-Controls */
-document.getElementById('upperCircleZoom').addEventListener('input',e=>{
-  state.upper.zoom = Number(e.target.value) / 100;
-  draw();
-});
-
-document.getElementById('upperCircleRadius').addEventListener('input',e=>{
-  state.upper.radius = Number(e.target.value);
+document.getElementById('lowerCircleZoom').addEventListener('input',e=>{
+  state.lower.zoom = Number(e.target.value) / 100;
   draw();
 });
 
@@ -484,14 +485,19 @@ document.getElementById('lowerCircleRadius').addEventListener('input',e=>{
   draw();
 });
 
+document.getElementById('upperCircleRadius').addEventListener('input',e=>{
+  state.upper.radius = Number(e.target.value);
+  draw();
+});
+
 /* Reset */
 document.getElementById('resetBtn').addEventListener('click',()=>{
   state.upper = { 
-    x:540, y:700, radius:400,
+    x:540, y:400, radius:120,
     imgOffsetX:0, imgOffsetY:0, zoom:1.5, rotation:0,
     minZoom:1.0, maxZoom:4.5 
   };
-  state.lower = { x:540, y:1400, radius:120 };
+  state.lower = { x:540, y:1400, radius:400, imgOffsetX:0, imgOffsetY:0, zoom:1.5, rotation:0, minZoom:1.0, maxZoom:4.5 };
   state.text = {
     content: state.text.content,
     lines: state.text.lines,
@@ -502,9 +508,9 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
     color: '#ffffff',
     lineHeight: 1.1
   };
-  document.getElementById('upperCircleZoom').value = 150;
-  document.getElementById('upperCircleRadius').value = 400;
-  document.getElementById('lowerCircleRadius').value = 120;
+  document.getElementById('lowerCircleZoom').value = 150;
+  document.getElementById('lowerCircleRadius').value = 400;
+  document.getElementById('upperCircleRadius').value = 120;
   document.getElementById('colorPicker').value = '#ffffff';
   lastClickedElement = null;
   draw();
@@ -614,7 +620,7 @@ function calculateLineData() {
     // Balken wenn: Stern vorhanden ODER (keine Sterne UND längste Zeile)
     const getBalken = hasMarker || (!hasAnyMarker && i === longestLineIndex);
     
- const fontWeight = 900;
+    const fontWeight = 900;
     
     let fontSize = 20;
     let textWidth = 0;
@@ -699,15 +705,15 @@ function handleWheel(e) {
   const overText = insideText(pos);
   
   if (overUpper) {
-    const zoomStep = 5;
-    const newZoomPercent = clamp((state.upper.zoom * 100) + (delta * zoomStep), 100, 450);
-    state.upper.zoom = newZoomPercent / 100;
-    document.getElementById('upperCircleZoom').value = newZoomPercent;
+    const radiusStep = 10;
+    state.upper.radius = clamp(state.upper.radius + (delta * radiusStep), 30, 500);
+    document.getElementById('upperCircleRadius').value = state.upper.radius;
     draw();
   } else if (overLower) {
-    const radiusStep = 10;
-    state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
-    document.getElementById('lowerCircleRadius').value = state.lower.radius;
+    const zoomStep = 5;
+    const newZoomPercent = clamp((state.lower.zoom * 100) + (delta * zoomStep), 100, 450);
+    state.lower.zoom = newZoomPercent / 100;
+    document.getElementById('lowerCircleZoom').value = newZoomPercent;
     draw();
   } else if (overText) {
     const widthStep = 20;
@@ -715,15 +721,15 @@ function handleWheel(e) {
     draw();
   }
   else if (lastClickedElement === 'upper') {
-    const zoomStep = 5;
-    const newZoomPercent = clamp((state.upper.zoom * 100) + (delta * zoomStep), 100, 450);
-    state.upper.zoom = newZoomPercent / 100;
-    document.getElementById('upperCircleZoom').value = newZoomPercent;
+    const radiusStep = 10;
+    state.upper.radius = clamp(state.upper.radius + (delta * radiusStep), 30, 500);
+    document.getElementById('upperCircleRadius').value = state.upper.radius;
     draw();
   } else if (lastClickedElement === 'lower') {
-    const radiusStep = 10;
-    state.lower.radius = clamp(state.lower.radius + (delta * radiusStep), 30, 500);
-    document.getElementById('lowerCircleRadius').value = state.lower.radius;
+    const zoomStep = 5;
+    const newZoomPercent = clamp((state.lower.zoom * 100) + (delta * zoomStep), 100, 450);
+    state.lower.zoom = newZoomPercent / 100;
+    document.getElementById('lowerCircleZoom').value = newZoomPercent;
     draw();
   } else if (lastClickedElement === 'text') {
     const widthStep = 20;
@@ -790,9 +796,16 @@ function handleStart(e) {
     else if (insideCircle(pos, state.lower)) {
       activeElement = 'lower';
       lastClickedElement = 'lower';
-      interactionMode = 'moveCircle';
-      dragStart = pos;
-      panStart = { x: state.lower.x, y: state.lower.y };
+      
+      if (ctrlPressed) {
+        interactionMode = 'panImage';
+        dragStart = pos;
+        panStart = { x: state.lower.imgOffsetX, y: state.lower.imgOffsetY };
+      } else {
+        interactionMode = 'moveCircle';
+        dragStart = pos;
+        panStart = { x: state.lower.x, y: state.lower.y };
+      }
     } else {
       lastClickedElement = null;
     }
@@ -813,20 +826,20 @@ function handleStart(e) {
     }
     else if (insideCircle(center, state.upper)) {
       activeElement = 'upper';
+      interactionMode = 'manipulateCircle';
+      lastTouches = [t1, t2];
+      initialPinchDistance = distance(t1, t2);
+      panStart = { radius: state.upper.radius };
+    } 
+    else if (insideCircle(center, state.lower)) {
+      activeElement = 'lower';
       interactionMode = 'manipulateImage';
       lastTouches = [t1, t2];
       initialPinchDistance = distance(t1, t2);
       initialPinchAngle = getTouchAngle(t1, t2);
-      initialZoom = state.upper.zoom;
-      initialRotation = state.upper.rotation;
-      initialImgOffset = { x: state.upper.imgOffsetX, y: state.upper.imgOffsetY };
-    } 
-    else if (insideCircle(center, state.lower)) {
-      activeElement = 'lower';
-      interactionMode = 'resizeCircle';
-      lastTouches = [t1, t2];
-      initialPinchDistance = distance(t1, t2);
-      panStart = { radius: state.lower.radius };
+      initialZoom = state.lower.zoom;
+      initialRotation = state.lower.rotation;
+      initialImgOffset = { x: state.lower.imgOffsetX, y: state.lower.imgOffsetY };
     }
   }
 }
@@ -856,29 +869,29 @@ function handleMove(e) {
       draw();
       return;
     }
-    else if (activeElement === 'upper' && interactionMode === 'manipulateImage') {
+    else if (activeElement === 'upper' && interactionMode === 'manipulateCircle') {
+      const currentDistance = distance(t1, t2);
+      const scale = currentDistance / initialPinchDistance;
+      state.upper.radius = clamp(panStart.radius * scale, 30, 500);
+      document.getElementById('upperCircleRadius').value = state.upper.radius;
+      draw();
+      return;
+    }
+    else if (activeElement === 'lower' && interactionMode === 'manipulateImage') {
       const currentDistance = distance(t1, t2);
       const currentAngle = getTouchAngle(t1, t2);
       const currentCenter = getTouchCenter(t1, t2);
       
       const zoomScale = currentDistance / initialPinchDistance;
-      state.upper.zoom = clamp(initialZoom * zoomScale, state.upper.minZoom, state.upper.maxZoom);
-      document.getElementById('upperCircleZoom').value = state.upper.zoom * 100;
+      state.lower.zoom = clamp(initialZoom * zoomScale, state.lower.minZoom, state.lower.maxZoom);
+      document.getElementById('lowerCircleZoom').value = state.lower.zoom * 100;
       
       const angleDelta = currentAngle - initialPinchAngle;
-      state.upper.rotation = initialRotation + angleDelta;
+      state.lower.rotation = initialRotation + angleDelta;
       
-      state.upper.imgOffsetX = initialImgOffset.x + (currentCenter.x - getTouchCenter(lastTouches[0], lastTouches[1]).x);
-      state.upper.imgOffsetY = initialImgOffset.y + (currentCenter.y - getTouchCenter(lastTouches[0], lastTouches[1]).y);
+      state.lower.imgOffsetX = initialImgOffset.x + (currentCenter.x - getTouchCenter(lastTouches[0], lastTouches[1]).x);
+      state.lower.imgOffsetY = initialImgOffset.y + (currentCenter.y - getTouchCenter(lastTouches[0], lastTouches[1]).y);
       
-      draw();
-      return;
-    } 
-    else if (activeElement === 'lower' && interactionMode === 'resizeCircle') {
-      const currentDistance = distance(t1, t2);
-      const scale = currentDistance / initialPinchDistance;
-      state.lower.radius = clamp(panStart.radius * scale, 30, 500);
-      document.getElementById('lowerCircleRadius').value = state.lower.radius;
       draw();
       return;
     }
@@ -905,11 +918,16 @@ function handleMove(e) {
     }
     draw();
   } 
-  else if (interactionMode === 'panImage' && activeElement === 'upper') {
+  else if (interactionMode === 'panImage') {
     const deltaX = pos.x - dragStart.x;
     const deltaY = pos.y - dragStart.y;
-    state.upper.imgOffsetX = panStart.x + deltaX;
-    state.upper.imgOffsetY = panStart.y + deltaY;
+    if (activeElement === 'upper') {
+      state.upper.imgOffsetX = panStart.x + deltaX;
+      state.upper.imgOffsetY = panStart.y + deltaY;
+    } else if (activeElement === 'lower') {
+      state.lower.imgOffsetX = panStart.x + deltaX;
+      state.lower.imgOffsetY = panStart.y + deltaY;
+    }
     draw();
   }
   else if (interactionMode === 'moveText' && activeElement === 'text') {
@@ -990,39 +1008,39 @@ function draw() {
     ctx.restore();
   }
   
-  // Unterer Kreis
-  drawCircleOutline(state.lower.x, state.lower.y, state.lower.radius);
-  
   // Oberer Kreis
-  drawCircleFilled(state.upper.x, state.upper.y, state.upper.radius, "#ffffff");
+  drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
   
-  // Oberer Kreis Inhalt
+  // Unterer Kreis
+  drawCircleFilled(state.lower.x, state.lower.y, state.lower.radius, "#ffffff");
+  
+  // Unterer Kreis Inhalt mit Bild
   if (state.overlayImg) {
     ctx.save();
     
     ctx.beginPath();
-    ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
+    ctx.arc(state.lower.x, state.lower.y, state.lower.radius - 4, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     
-    ctx.translate(state.upper.x, state.upper.y);
-    ctx.rotate(state.upper.rotation * Math.PI / 180);
-    ctx.translate(-state.upper.x, -state.upper.y);
+    ctx.translate(state.lower.x, state.lower.y);
+    ctx.rotate(state.lower.rotation * Math.PI / 180);
+    ctx.translate(-state.lower.x, -state.lower.y);
     
     const imgAspect = state.overlayImg.width / state.overlayImg.height;
-    const circleSize = (state.upper.radius - 4) * 2;
+    const circleSize = (state.lower.radius - 4) * 2;
     
     let drawWidth, drawHeight;
     
     if (imgAspect > 1) {
-      drawHeight = circleSize * state.upper.zoom;
+      drawHeight = circleSize * state.lower.zoom;
       drawWidth = drawHeight * imgAspect;
     } else {
-      drawWidth = circleSize * state.upper.zoom;
+      drawWidth = circleSize * state.lower.zoom;
       drawHeight = drawWidth / imgAspect;
     }
     
-    const minSize = circleSize * state.upper.zoom;
+    const minSize = circleSize * state.lower.zoom;
     if (drawWidth < minSize) {
       drawWidth = minSize;
       drawHeight = drawWidth / imgAspect;
@@ -1034,8 +1052,8 @@ function draw() {
     
     ctx.drawImage(
       state.overlayImg,
-      state.upper.x - drawWidth/2 + state.upper.imgOffsetX,
-      state.upper.y - drawHeight/2 + state.upper.imgOffsetY,
+      state.lower.x - drawWidth/2 + state.lower.imgOffsetX,
+      state.lower.y - drawHeight/2 + state.lower.imgOffsetY,
       drawWidth,
       drawHeight
     );
@@ -1046,36 +1064,36 @@ function draw() {
     ctx.save();
     
     ctx.beginPath();
-    ctx.arc(state.upper.x, state.upper.y, state.upper.radius - 4, 0, Math.PI * 2);
+    ctx.arc(state.lower.x, state.lower.y, state.lower.radius - 4, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     
-    const lowerCircleSourceX = state.lower.x - bgDimensions.offsetX;
-    const lowerCircleSourceY = state.lower.y - bgDimensions.offsetY;
+    const upperCircleSourceX = state.upper.x - bgDimensions.offsetX;
+    const upperCircleSourceY = state.upper.y - bgDimensions.offsetY;
     
     const scaleX = state.bgImg.width / bgDimensions.drawWidth;
     const scaleY = state.bgImg.height / bgDimensions.drawHeight;
     
-    const srcCenterX = lowerCircleSourceX * scaleX;
-    const srcCenterY = lowerCircleSourceY * scaleY;
-    const srcSize = (state.lower.radius * 2 / state.upper.zoom) * scaleX;
+    const srcCenterX = upperCircleSourceX * scaleX;
+    const srcCenterY = upperCircleSourceY * scaleY;
+    const srcSize = (state.upper.radius * 2 / state.lower.zoom) * scaleX;
     
     const srcX = srcCenterX - srcSize / 2;
     const srcY = srcCenterY - srcSize / 2;
     
-    const upperCircleSize = (state.upper.radius - 4) * 2;
+    const lowerCircleSize = (state.lower.radius - 4) * 2;
     ctx.drawImage(
       state.bgImg,
       srcX, srcY, srcSize, srcSize,
-      state.upper.x - upperCircleSize/2, state.upper.y - upperCircleSize/2,
-      upperCircleSize, upperCircleSize
+      state.lower.x - lowerCircleSize/2, state.lower.y - lowerCircleSize/2,
+      lowerCircleSize, lowerCircleSize
     );
     
     ctx.restore();
   }
   
-  // Outline für oberen Kreis
-  drawCircleOutline(state.upper.x, state.upper.y, state.upper.radius);
+  // Outline für unteren Kreis
+  drawCircleOutline(state.lower.x, state.lower.y, state.lower.radius);
   
   // Text zeichnen mit dynamischen Größen
   if (state.text.content && state.text.lines.length > 0) {
@@ -1157,7 +1175,7 @@ function draw() {
         }
       }
       
-         // Wasserzeichen in der letzten Zeile
+      // Wasserzeichen in der letzten Zeile
       if (data.isLastLine && state.watermarkImg) {
         ctx.save();
         
