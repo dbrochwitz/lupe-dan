@@ -245,9 +245,9 @@
         </label>
         <label>
           Text auf Bild (Enter für neue Zeile, * am Anfang für Balken):
-          <textarea id="textInput" placeholder="Text eingeben..." rows="3">
-
-</textarea>
+          <textarea id="textInput" placeholder="Text eingeben..." rows="3">Jede Zeile
+*mit Sternchen
+macht einen Balken</textarea>
         </label>
       </div>
       <div class="circle-controls">
@@ -614,8 +614,7 @@ function calculateLineData() {
     // Balken wenn: Stern vorhanden ODER (keine Sterne UND längste Zeile)
     const getBalken = hasMarker || (!hasAnyMarker && i === longestLineIndex);
     
-    const charCount = displayText.length;
-    const fontWeight = charCount > 10 ? 400 : 900;
+ const fontWeight = 900;
     
     let fontSize = 20;
     let textWidth = 0;
@@ -645,7 +644,7 @@ function calculateLineData() {
       // Bei letzter Zeile: reduzierter Platz für Text
       let availableWidth = textBoxWidth;
       if (isLastLine && state.watermarkImg) {
-        availableWidth = textBoxWidth - (fontSize * 0.95);
+        availableWidth = textBoxWidth - (fontSize);
         if (getBalken) {
           ctx.font = `${fontWeight} 100px 'Roboto', sans-serif`;
           const iPadding = ctx.measureText('I').width / 2;
@@ -1163,7 +1162,7 @@ function draw() {
         ctx.save();
         
         // Wasserzeichen: 90% der Schriftgröße, am rechten Rand der Textbox
-        const wmSize = data.fontSize * 0.9;
+        const wmSize = data.fontSize * 0.95;
         const wmX = state.text.boxWidth / 2 - (wmSize / 2);
         const wmY = textY - (data.fontSize * 0.05);
         
